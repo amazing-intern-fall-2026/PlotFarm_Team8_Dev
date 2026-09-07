@@ -1,1 +1,45 @@
-import * as dotenv from " dotenv\;\ndotenv.config();\nexport const PORT = process.env.PORT || 3000;\nexport const CLIENT_URL = process.env.CLIENT_URL || \http://localhost:3001\;\nexport const DB_CONFIG = {\n user: process.env.DB_USER,\n password: process.env.DB_PASSWORD,\n server: process.env.DB_SERVER,\n database: process.env.DB_DATABASE,\n port: Number(process.env.DB_PORT) || 1433,\n options: { encrypt: true, trustServerCertificate: true }\n};
+import * as dotenv from "dotenv";
+dotenv.config();
+
+export const PORT = process.env.PORT || 3000;
+export const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:3001";
+
+// Helper to convert env strings to boolean safely
+const toBoolean = (value) => {
+  return value?.toLowerCase() === "true";
+};
+
+// Validate required DB environment variables (do not log passwords)
+const requiredVars = ["DB_SERVER", "DB_NAME", "DB_USER", "DB_PASSWORD"];
+for (const varName of requiredVars) {
+  if (!process.env[varName]) {
+    throw new Error(`Missing required environment variable: ${varName}`);
+  }
+}
+
+// Process optional DB_PORT and support named instances
+const serverEnv = process.env.DB_SERVER;
+const portEnv = process.env.DB_PORT;
+let port; // undefined by default
+if (portEnv) {
+  const portNum = Number(portEnv);
+  if (!Number.isInteger(portNum) || portNum < 1 || portNum > 65535) {
+    throw new Error('DB_PORT must be an integer between 1 and 65535');
+  }
+  // Only set port if server does NOT contain a named instance
+  if (!serverEnv.includes('\\')) {
+    port = portNum;
+  }
+}
+
+export const DB_CONFIG = {
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  server: serverEnv,
+  database: process.env.DB_NAME,
+  ...(port !== undefined ? { port } : {}),
+  options: {
+    encrypt: toBoolean(process.env.DB_ENCRYPT),
+    trustServerCertificate: toBoolean(process.env.DB_TRUST_SERVER_CERTIFICATE),
+  },
+};
