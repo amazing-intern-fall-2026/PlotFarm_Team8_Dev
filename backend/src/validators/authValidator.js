@@ -1,13 +1,12 @@
 // src/validators/authValidator.js
 import { body } from 'express-validator';
 import { validationResult } from 'express-validator';
+import { errorResponse } from '../utils/response.js';
 
 // Middleware to handle validation result
 export const handleValidation = (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    // Use existing errorResponse helper
-    const { errorResponse } = require('../utils/response.js');
     return errorResponse(res, {
       message: 'Validation failed',
       errors: errors.array(),
