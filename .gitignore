@@ -1,5 +1,9 @@
-node_modules/
-.env
-dist/
-coverage/
-logs/
+.idea/
+.vscode/
+**/node_modules/
+**/.env
+**/.env.*
+!**/.env.example
+**/dist/
+**/build/
+*.log
