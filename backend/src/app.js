@@ -5,6 +5,7 @@ import helmet from "helmet";
 import morgan from "morgan";
 import { PORT, CLIENT_URL } from "./config/config.js";
 import healthRoutes from "./routes/healthRoutes.js";
+import authRoutes from "./routes/authRoutes.js";
 import notFoundHandler from "./middlewares/notFound.js";
 import errorHandler from "./middlewares/errorHandler.js";
 
@@ -19,6 +20,7 @@ app.use(express.json());
 // API Prefix
 const apiPrefix = "/api/v1";
 app.use(`${apiPrefix}`, healthRoutes);
+app.use(`${apiPrefix}/auth`, authRoutes);
 
 // 404 handler
 app.use(notFoundHandler);

@@ -1,0 +1,23 @@
+// src/middlewares/authenticate.js
+import jwt from 'jsonwebtoken';
+import { AppError } from '../utils/AppError.js';
+import { errorResponse } from '../utils/response.js';
+
+/** Middleware to verify JWT and set req.user */
+export default (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    // Missing or malformed token
+    const err = new AppError('Authorization token missing or malformed', 401);
+    return errorResponse(res, { message: err.message, statusCode: err.statusCode });
+  }
+  const token = authHeader.split(' ')[1];
+  try {
+    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = payload; // attach payload for downstream use
+    next();
+  } catch (e) {
+    const err = new AppError('Invalid or expired token', 401);
+    return errorResponse(res, { message: err.message, statusCode: err.statusCode });
+  }
+};
