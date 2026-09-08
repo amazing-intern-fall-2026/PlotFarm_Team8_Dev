@@ -4,6 +4,13 @@ dotenv.config();
 export const PORT = process.env.PORT || 3000;
 export const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:3001";
 
+export const JWT_CONFIG = {
+  accessSecret: process.env.ACCESS_TOKEN_SECRET || 'fallback_access_secret',
+  refreshSecret: process.env.REFRESH_TOKEN_SECRET || 'fallback_refresh_secret',
+  accessExpiresIn: process.env.ACCESS_TOKEN_EXPIRES_IN || '1h',
+  refreshExpiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN || '7d',
+};
+
 // Helper to convert env strings to boolean safely
 const toBoolean = (value) => {
   return value?.toLowerCase() === "true";
