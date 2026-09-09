@@ -3,6 +3,7 @@ import { useLocation, useNavigate, Link } from "react-router-dom";
 import LoginForm from "../components/LoginForm";
 import RegisterForm from "../components/RegisterForm";
 import { getCurrentUser, getRedirectPathByRole, isAuthenticated, logout } from "./auth.api";
+import { Alert } from "../../components/ui";
 
 interface AuthPageProps {
   initialMode?: "login" | "register";
@@ -28,7 +29,6 @@ export default function AuthPage({ initialMode }: AuthPageProps) {
     logout();
     setCurrentUser(null);
   }
-
 
   return (
     <div className="min-h-screen bg-linear-to-br from-emerald-50 via-teal-50/40 to-slate-100 flex flex-col justify-center py-10 px-4 sm:px-6 lg:px-8">
@@ -63,37 +63,40 @@ export default function AuthPage({ initialMode }: AuthPageProps) {
         <div className="bg-white py-8 px-6 shadow-xl shadow-gray-200/50 rounded-2xl border border-gray-100 sm:px-8">
           {/* Active Session Notice if already logged in */}
           {currentUser && (
-            <div className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50/80 p-3.5 text-xs text-emerald-900 flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <span className="font-semibold flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                  Đang đăng nhập:
-                </span>
-                <button
-                  type="button"
-                  onClick={handleLogoutCurrent}
-                  className="font-medium text-red-600 hover:text-red-700 hover:underline cursor-pointer"
-                >
-                  Đăng xuất
-                </button>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>
-                  {currentUser.fullName || currentUser.username} (<strong className="uppercase">{currentUser.role}</strong>)
-                </span>
+            <Alert
+              variant="success"
+              className="mb-5"
+              icon={
+                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse inline-block" />
+              }
+              title="Đang duy trì phiên đăng nhập:"
+            >
+              <div className="flex flex-col gap-2 mt-1">
+                <div className="flex items-center justify-between text-xs">
+                  <span>
+                    {currentUser.fullName || currentUser.username} (
+                    <strong className="uppercase">{currentUser.role}</strong>)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleLogoutCurrent}
+                    className="font-medium text-red-600 hover:text-red-700 hover:underline cursor-pointer"
+                  >
+                    Đăng xuất
+                  </button>
+                </div>
                 <Link
                   to={getRedirectPathByRole(currentUser.role)}
-                  className="rounded-lg bg-emerald-600 px-2.5 py-1 text-white font-medium hover:bg-emerald-700 transition"
+                  className="rounded-lg bg-emerald-600 px-2.5 py-1 text-white font-medium hover:bg-emerald-700 transition text-center text-xs"
                 >
                   Vào trang {currentUser.role} →
                 </Link>
               </div>
-            </div>
+            </Alert>
           )}
 
           {/* Tab Switcher */}
           <div className="flex rounded-xl bg-gray-100/90 p-1 mb-6">
-
             <button
               type="button"
               onClick={() => handleSwitchMode("login")}
@@ -130,7 +133,6 @@ export default function AuthPage({ initialMode }: AuthPageProps) {
             />
           )}
         </div>
-
 
         {/* Footer */}
         <div className="mt-6 text-center text-xs text-gray-500 space-y-1">
