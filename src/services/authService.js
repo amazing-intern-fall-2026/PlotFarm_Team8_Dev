@@ -1,5 +1,6 @@
 import { hashPassword, comparePassword } from '../utils/passwordHelper.js';
 import { generateTokens } from '../utils/jwtHelper.js';
+import { generateId } from '../utils/idGenerator.js';
 import * as authRepository from '../repositories/authRepository.js';
 
 /**
@@ -24,7 +25,7 @@ export const register = async (userData) => {
   const hashedPassword = await hashPassword(MatKhau);
 
   // 4. Generate Customer ID
-  const MaKH = 'KH' + Date.now().toString().slice(-10); // Simple ID generation
+  const MaKH = generateId('KH');
 
   // 5. Prepare data
   const customerData = {
@@ -50,6 +51,48 @@ export const register = async (userData) => {
     TenDangNhap: accountData.TenDangNhap,
     TenKH: customerData.TenKH,
     Email: customerData.Email
+  };
+};
+
+/**
+ * Register a new employee (Farmer / Admin) for testing
+ */
+export const registerEmployee = async (employeeData) => {
+  const { Ho, Ten, Email, DienThoai, ChucVu, MatKhau, Role } = employeeData;
+
+  const emailExists = await authRepository.checkEmailExists(Email);
+  if (emailExists) throw new Error('Email đã được sử dụng.');
+
+  const accountExists = await authRepository.findAccountByUsername(Email);
+  if (accountExists) throw new Error('Tên đăng nhập đã tồn tại.');
+
+  const hashedPassword = await hashPassword(MatKhau);
+  const MaNV = generateId('NV');
+
+  const dataNV = {
+    MaNV,
+    Ho,
+    Ten,
+    Email,
+    DienThoai,
+    ChucVu,
+    TrangThai: 'ACTIVE'
+  };
+
+  const accountData = {
+    TenDangNhap: Email,
+    MatKhauHash: hashedPassword,
+    MaVaiTro: Role, // 'FARMER' or 'ADMIN'
+    MaNV: MaNV
+  };
+
+  await authRepository.createEmployeeAccount(dataNV, accountData);
+
+  return {
+    TenDangNhap: accountData.TenDangNhap,
+    HoTen: `${Ho} ${Ten}`,
+    Email: dataNV.Email,
+    Role: accountData.MaVaiTro
   };
 };
 

@@ -6,7 +6,8 @@ export const verifyToken = (req, res, next) => {
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({
       success: false,
-      message: 'Access denied. No token provided or invalid format.',
+      message: 'Không tìm thấy Token hoặc định dạng không hợp lệ.',
+      errorType: 'TOKEN_MISSING'
     });
   }
 
@@ -17,9 +18,17 @@ export const verifyToken = (req, res, next) => {
     req.user = decoded; // Attach the decoded user payload to request
     next();
   } catch (error) {
+    if (error.name === 'TokenExpiredError') {
+      return res.status(401).json({
+        success: false,
+        message: 'Token đã hết hạn. Vui lòng lấy token mới.',
+        errorType: 'TOKEN_EXPIRED'
+      });
+    }
     return res.status(401).json({
       success: false,
-      message: 'Invalid or expired token.',
+      message: 'Token không hợp lệ.',
+      errorType: 'TOKEN_INVALID'
     });
   }
 };

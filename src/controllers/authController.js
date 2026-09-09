@@ -30,6 +30,42 @@ export const register = async (req, res, next) => {
   }
 };
 
+export const registerEmployee = async (req, res, next) => {
+  try {
+    const { Ho, Ten, Email, DienThoai, ChucVu, MatKhau, Role } = req.body;
+
+    if (!Ho || !Ten || !Email || !DienThoai || !ChucVu || !MatKhau || !Role) {
+      return res.status(400).json({
+        success: false,
+        message: 'Vui lòng cung cấp đầy đủ thông tin.',
+      });
+    }
+    
+    if (Role !== 'FARMER' && Role !== 'ADMIN') {
+      return res.status(400).json({
+        success: false,
+        message: 'Role không hợp lệ. Chỉ chấp nhận FARMER hoặc ADMIN.',
+      });
+    }
+
+    const newUser = await authService.registerEmployee({ Ho, Ten, Email, DienThoai, ChucVu, MatKhau, Role });
+
+    res.status(201).json({
+      success: true,
+      message: 'Đăng ký nhân viên thành công',
+      data: newUser,
+    });
+  } catch (error) {
+    if (error.message === 'Email đã được sử dụng.' || error.message === 'Tên đăng nhập đã tồn tại.') {
+      return res.status(400).json({
+        success: false,
+        message: error.message,
+      });
+    }
+    next(error);
+  }
+};
+
 export const login = async (req, res, next) => {
   try {
     const { username, password } = req.body;

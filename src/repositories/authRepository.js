@@ -1,5 +1,6 @@
 import sql from 'mssql';
 import { getPool } from '../config/database.js';
+import { runInTransaction } from '../utils/transactionHelper.js';
 
 export const findAccountByUsername = async (username) => {
   const pool = getPool();
@@ -14,12 +15,7 @@ export const findAccountByUsername = async (username) => {
 };
 
 export const createCustomerAccount = async (customerData, accountData) => {
-  const pool = getPool();
-  const transaction = new sql.Transaction(pool);
-
-  try {
-    await transaction.begin();
-
+  return runInTransaction(async (transaction) => {
     // Insert Customer
     await transaction.request()
       .input('MaKH', sql.VarChar(20), customerData.MaKH)
@@ -44,12 +40,37 @@ export const createCustomerAccount = async (customerData, accountData) => {
         VALUES (@TenDangNhap, @MatKhauHash, @MaVaiTro, @MaKH)
       `);
 
-    await transaction.commit();
     return true;
-  } catch (error) {
-    await transaction.rollback();
-    throw error;
-  }
+  });
+};
+
+export const createEmployeeAccount = async (employeeData, accountData) => {
+  return runInTransaction(async (transaction) => {
+    await transaction.request()
+      .input('MaNV', sql.VarChar(20), employeeData.MaNV)
+      .input('Ho', sql.NVarChar(100), employeeData.Ho)
+      .input('Ten', sql.NVarChar(100), employeeData.Ten)
+      .input('Email', sql.VarChar(254), employeeData.Email)
+      .input('DienThoai', sql.VarChar(15), employeeData.DienThoai)
+      .input('ChucVu', sql.VarChar(50), employeeData.ChucVu)
+      .input('TrangThai', sql.VarChar(20), employeeData.TrangThai)
+      .query(`
+        INSERT INTO dbo.NHANVIEN (MaNV, Ho, Ten, Email, DienThoai, ChucVu, TrangThai)
+        VALUES (@MaNV, @Ho, @Ten, @Email, @DienThoai, @ChucVu, @TrangThai)
+      `);
+
+    await transaction.request()
+      .input('TenDangNhap', sql.VarChar(50), accountData.TenDangNhap)
+      .input('MatKhauHash', sql.VarChar(255), accountData.MatKhauHash)
+      .input('MaVaiTro', sql.VarChar(20), accountData.MaVaiTro)
+      .input('MaNV', sql.VarChar(20), accountData.MaNV)
+      .query(`
+        INSERT INTO dbo.TAIKHOAN (TenDangNhap, MatKhauHash, MaVaiTro, MaNV)
+        VALUES (@TenDangNhap, @MatKhauHash, @MaVaiTro, @MaNV)
+      `);
+
+    return true;
+  });
 };
 
 export const getUserProfile = async (username) => {
