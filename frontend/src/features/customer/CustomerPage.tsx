@@ -67,6 +67,10 @@ export default function CustomerPage() {
     },
   ]);
 
+  function handleGoToFarmList() {
+  navigate("/customer/farms");
+  }
+
   function handleLogout() {
     logout();
     navigate("/login", { replace: true });
@@ -157,6 +161,15 @@ export default function CustomerPage() {
                 >
                   Xem Báo Cáo Thời Tiết
                 </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  fullWidth={false}
+                  className="bg-emerald-600/50 border border-emerald-400/40 text-emerald-700 hover:bg-emerald-600"
+                  onClick={handleGoToFarmList}
+                >
+                  Danh sách Nông Trại
+</Button>
               </div>
             </div>
           </div>
