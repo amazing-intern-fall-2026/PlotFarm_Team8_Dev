@@ -4,15 +4,14 @@ import jwt from 'jsonwebtoken';
 import { getPool } from '../config/database.js';
 import sql from 'mssql';
 import { AppError } from '../utils/AppError.js';
+import { runInTransaction } from '../utils/transactionHelper.js';
 import * as authRepo from '../repositories/authRepository.js';
 
 /** Register a new customer and linked account inside a transaction */
 export const registerUser = async (payload) => {
   const { fullName, email, phone, shippingAddress, username, password } = payload;
-  const pool = getPool();
-  const transaction = new sql.Transaction(pool);
-  await transaction.begin();
-  try {
+  
+  return runInTransaction(async (transaction) => {
     // Check duplicate username
     const existingUsername = await authRepo.findAccountByUsername(username);
     if (existingUsername) throw new AppError('Username already exists', 409);
@@ -41,22 +40,41 @@ export const registerUser = async (payload) => {
       maKH: customerId,
     }, transaction);
 
-    await transaction.commit();
     return { account: { username }, customer: { id: customerId, fullName, email } };
-  } catch (err) {
-    try {
-      await transaction.rollback();
-    } catch (rollbackErr) {
-      // ignore rollback error if already rolled back
-    }
-    if (err instanceof sql.RequestError && err.number === 2627) {
-      if (err.message && (err.message.includes('Email') || err.message.includes('UQ__KHACHHAN'))) {
-        throw new AppError('Email already exists', 409);
-      }
-      throw new AppError('Username or email already exists', 409);
-    }
-    throw err;
-  }
+  });
+};
+
+/** Register a new employee (Farmer/Admin) inside a transaction */
+export const registerEmployee = async (payload) => {
+  const { fullName, email, phone, username, password, role } = payload;
+  
+  return runInTransaction(async (transaction) => {
+    // Check duplicate username
+    const existingUsername = await authRepo.findAccountByUsername(username);
+    if (existingUsername) throw new AppError('Username already exists', 409);
+
+    // Create employee inside transaction
+    const employeeId = await authRepo.createEmployee({
+      fullName,
+      email,
+      phone,
+      role
+    }, transaction);
+
+    // Hash password
+    const saltRounds = parseInt(process.env.BCRYPT_SALT_ROUNDS, 10) || 10;
+    const passwordHash = await bcrypt.hash(password, saltRounds);
+
+    // Create account inside transaction
+    await authRepo.createAccountForEmployee({
+      username,
+      passwordHash,
+      role: role,
+      maNV: employeeId,
+    }, transaction);
+
+    return { account: { username, role }, employee: { id: employeeId, fullName, email } };
+  });
 };
 
 /** Login user */
