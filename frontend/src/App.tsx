@@ -5,6 +5,8 @@ import CustomerPage from "./features/customer/CustomerPage";
 import FarmerLayout from "./features/farmer/FarmerLayout";
 import AdminLayout from "./features/admin/AdminLayout";
 import { getCurrentUser, getRedirectPathByRole, isAuthenticated } from "./features/auth/auth.api";
+import FarmListPage from "./features/customer/FarmListPage";
+import FarmDetailPage from "./features/customer/FarmDetailPage";
 
 export default function App() {
   function getDefaultRedirect() {
@@ -57,13 +59,29 @@ export default function App() {
         }
       />
 
-      {/* Customer Protected Portal */}
+     {/* Customer Protected Portal */}
       <Route
         path="/customer"
         element={
           <ProtectedRoute allowedRoles={["customer"]}>
             <CustomerPage />
           </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/customer/farms"
+        element={
+          <ProtectedRoute allowedRoles={["customer"]}>
+          <FarmListPage />
+        </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/customer/farms/:id"
+        element={
+          <ProtectedRoute allowedRoles={["customer"]}>
+          <FarmDetailPage />
+        </ProtectedRoute>
         }
       />
       <Route
