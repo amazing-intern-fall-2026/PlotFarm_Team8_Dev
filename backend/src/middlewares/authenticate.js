@@ -17,7 +17,11 @@ export default (req, res, next) => {
     req.user = payload; // attach payload for downstream use
     next();
   } catch (e) {
-    const err = new AppError('Invalid or expired token', 401);
+    if (e.name === 'TokenExpiredError') {
+      const err = new AppError('Token đã hết hạn', 401);
+      return errorResponse(res, { message: err.message, statusCode: err.statusCode });
+    }
+    const err = new AppError('Token không hợp lệ', 401);
     return errorResponse(res, { message: err.message, statusCode: err.statusCode });
   }
 };

@@ -2,26 +2,11 @@
 import sql from 'mssql';
 import { getPool } from '../config/database.js';
 
+import { generateIncrementalId } from '../utils/idGenerator.js';
+
 /** Insert a new customer and return generated MaKH */
 export const createCustomer = async ({ fullName, email, phone, shippingAddress }, transaction) => {
-  const idRequest = new sql.Request(transaction || getPool());
-  const idResult = await idRequest.query(`
-    SELECT TOP 1 MaKH FROM dbo.KHACHHANG WITH (UPDLOCK, HOLDLOCK)
-    WHERE MaKH LIKE 'KH%'
-    ORDER BY LEN(MaKH) DESC, MaKH DESC
-  `);
-
-  let newMaKH = 'KH001';
-  if (idResult.recordset.length > 0 && idResult.recordset[0].MaKH) {
-    const lastMaKH = idResult.recordset[0].MaKH;
-    const match = lastMaKH.match(/^KH(\d+)$/);
-    if (match) {
-      const nextNum = parseInt(match[1], 10) + 1;
-      newMaKH = `KH${String(nextNum).padStart(match[1].length, '0')}`;
-    } else {
-      newMaKH = `KH${Date.now().toString().slice(-8)}${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
-    }
-  }
+  const newMaKH = await generateIncrementalId(transaction || getPool(), 'KHACHHANG', 'MaKH', 'KH', 3);
 
   const insertRequest = new sql.Request(transaction || getPool());
   const query = `INSERT INTO dbo.KHACHHANG (MaKH, TenKH, Email, DienThoai, DiaChi, TrangThai)
@@ -45,6 +30,35 @@ export const createAccountForCustomer = async ({ username, passwordHash, role, m
   request.input('hash', sql.VarChar, passwordHash);
   request.input('role', sql.VarChar, role);
   request.input('maKH', sql.VarChar, maKH);
+  await request.query(query);
+};
+
+/** Insert a new employee and return generated MaNV */
+export const createEmployee = async ({ fullName, email, phone, role }, transaction) => {
+  const newMaNV = await generateIncrementalId(transaction || getPool(), 'NHANVIEN', 'MaNV', 'NV', 3);
+
+  const insertRequest = new sql.Request(transaction || getPool());
+  const query = `INSERT INTO dbo.NHANVIEN (MaNV, Ho, Ten, Email, DienThoai, ChucVu, TrangThai)
+                 OUTPUT INSERTED.MaNV
+                 VALUES (@maNV, '', @fullName, @email, @phone, @role, 'ACTIVE')`;
+  insertRequest.input('maNV', sql.VarChar, newMaNV);
+  insertRequest.input('fullName', sql.NVarChar, fullName);
+  insertRequest.input('email', sql.VarChar, email);
+  insertRequest.input('phone', sql.VarChar, phone);
+  insertRequest.input('role', sql.VarChar, role);
+  const result = await insertRequest.query(query);
+  return result.recordset[0].MaNV;
+};
+
+/** Insert a new account linked to an employee */
+export const createAccountForEmployee = async ({ username, passwordHash, role, maNV }, transaction) => {
+  const request = new sql.Request(transaction || getPool());
+  const query = `INSERT INTO dbo.TAIKHOAN (TenDangNhap, MatKhauHash, MaVaiTro, MaNV)
+                 VALUES (@username, @hash, @role, @maNV)`;
+  request.input('username', sql.VarChar, username);
+  request.input('hash', sql.VarChar, passwordHash);
+  request.input('role', sql.VarChar, role);
+  request.input('maNV', sql.VarChar, maNV);
   await request.query(query);
 };
 
