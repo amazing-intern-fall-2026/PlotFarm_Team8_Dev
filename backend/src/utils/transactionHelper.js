@@ -18,12 +18,10 @@ export const runInTransaction = async (callback) => {
     await transaction.commit();
     return result;
   } catch (error) {
-    if (transaction.isActive) {
-      try {
-        await transaction.rollback();
-      } catch (rollbackErr) {
-        // Bỏ qua lỗi rollback nếu transaction đã chết
-      }
+    try {
+      await transaction.rollback();
+    } catch (rollbackErr) {
+      // Bỏ qua lỗi rollback nếu transaction đã chết hoặc chưa begin
     }
     throw error;
   }
