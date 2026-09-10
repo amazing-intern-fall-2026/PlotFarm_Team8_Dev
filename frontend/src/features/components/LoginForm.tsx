@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { getRedirectPathByRole, login } from "../auth/auth.api";
+import { getRedirectPathByRole, login, loginWithDemoRole } from "../auth/auth.api";
 import type { BackendError, LoginRequest } from "../auth/auth.types";
 import {
   formatBackendErrorMessage,
@@ -54,6 +54,28 @@ export default function LoginForm({
     }
   }
 
+  // 1-Click login using Mock Demo Account
+  function handleQuickDemoLogin(role: "farmer" | "farmer1" | "farmer2" | "farmer3" | "admin" | "customer") {
+    try {
+      setLoading(true);
+      const auth = loginWithDemoRole(role);
+      const targetPath = onSuccessRedirect || getRedirectPathByRole(auth.user?.role);
+      navigate(targetPath, { replace: true });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Quick fill input fields
+  function handleFillDemo(username: string) {
+    setForm({
+      username,
+      password: "password123",
+    });
+    setFieldErrors({});
+    setGeneralError(null);
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -69,7 +91,7 @@ export default function LoginForm({
       setFieldErrors({});
       setGeneralError(null);
 
-      // Call real backend API
+      // Call real backend API (falls back to mock if backend 401/offline and demo username is used)
       const response = await login(form);
 
       // Redirect based on user role returned from backend
@@ -142,7 +164,7 @@ export default function LoginForm({
         <Input
           label="Tên tài khoản (Username)"
           type="text"
-          placeholder="Nhập tên đăng nhập của bạn"
+          placeholder="Ví dụ: farmer, admin, hoặc tài khoản đã đăng ký"
           value={form.username}
           disabled={loading}
           autoComplete="username"
@@ -168,7 +190,7 @@ export default function LoginForm({
         <Input
           label="Mật khẩu"
           type="password"
-          placeholder="Nhập mật khẩu của bạn"
+          placeholder="Nhập mật khẩu"
           value={form.password}
           disabled={loading}
           autoComplete="current-password"
@@ -230,6 +252,141 @@ export default function LoginForm({
           </button>
         </div>
       )}
+
+      {/* Demo Mock Testing Tool (1-Click Vào Thẳng Trang theo Role) */}
+      <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 p-4 text-xs space-y-3">
+        <div className="font-semibold text-emerald-950 flex items-center justify-between">
+          <span className="flex items-center gap-1.5">
+            <span className="text-base">🚀</span>
+            Tài khoản kiểm thử nhanh (Demo 1-Click):
+          </span>
+          <span className="text-2xs text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-full font-medium">
+            3 Nông Dân + Admin + Customer
+          </span>
+        </div>
+
+        {/* Farmer Mock Buttons (Demonstrating Admin Assignment Rule) */}
+        <div>
+          <div className="text-2xs font-bold text-gray-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+            <span>👨‍🌾</span>
+            <span>Nông Dân (Phân công Farm/Plot khác nhau):</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => handleQuickDemoLogin("farmer1")}
+              className="flex flex-col items-center justify-center p-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-medium shadow-xs transition cursor-pointer disabled:opacity-50 text-center"
+            >
+              <span className="text-base">👨‍🌾</span>
+              <span className="font-bold text-xs mt-0.5">Farmer 1</span>
+              <span className="text-2xs text-emerald-100">Lâm Đồng & Bảo Lộc (5 plots)</span>
+            </button>
+
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => handleQuickDemoLogin("farmer2")}
+              className="flex flex-col items-center justify-center p-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-medium shadow-xs transition cursor-pointer disabled:opacity-50 text-center"
+            >
+              <span className="text-base">👩‍🌾</span>
+              <span className="font-bold text-xs mt-0.5">Farmer 2</span>
+              <span className="text-2xs text-emerald-100">Củ Chi Hữu Cơ (3 plots)</span>
+            </button>
+
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => handleQuickDemoLogin("farmer3")}
+              className="flex flex-col items-center justify-center p-2 rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-medium shadow-xs transition cursor-pointer disabled:opacity-50 text-center"
+            >
+              <span className="text-base">🧑‍🌾</span>
+              <span className="font-bold text-xs mt-0.5">Farmer 3</span>
+              <span className="text-2xs text-teal-100">Mê Kông Cây Ăn Trái (2 plots)</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Other Roles */}
+        <div>
+          <div className="text-2xs font-bold text-gray-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+            <span>👥</span>
+            <span>Các vai trò khác:</span>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => handleQuickDemoLogin("admin")}
+              className="flex items-center justify-center gap-2 p-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-medium shadow-xs transition cursor-pointer disabled:opacity-50"
+            >
+              <span className="text-base">👑</span>
+              <div className="text-left">
+                <span className="font-bold text-xs block">Vào Admin</span>
+                <span className="text-2xs text-indigo-200">/admin (ADMIN)</span>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => handleQuickDemoLogin("customer")}
+              className="flex items-center justify-center gap-2 p-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-xs transition cursor-pointer disabled:opacity-50"
+            >
+              <span className="text-base">👤</span>
+              <div className="text-left">
+                <span className="font-bold text-xs block">Vào Khách Hàng</span>
+                <span className="text-2xs text-blue-200">/customer (CUSTOMER)</span>
+              </div>
+            </button>
+          </div>
+        </div>
+
+        <div className="pt-2 border-t border-emerald-200/50 flex items-center justify-between text-2xs text-gray-500">
+          <span>Điền nhanh:</span>
+          <div className="flex gap-2 font-medium flex-wrap">
+            <button
+              type="button"
+              onClick={() => handleFillDemo("farmer1")}
+              className="text-emerald-700 hover:underline cursor-pointer"
+            >
+              farmer1
+            </button>
+            <span>•</span>
+            <button
+              type="button"
+              onClick={() => handleFillDemo("farmer2")}
+              className="text-emerald-700 hover:underline cursor-pointer"
+            >
+              farmer2
+            </button>
+            <span>•</span>
+            <button
+              type="button"
+              onClick={() => handleFillDemo("farmer3")}
+              className="text-teal-700 hover:underline cursor-pointer"
+            >
+              farmer3
+            </button>
+            <span>•</span>
+            <button
+              type="button"
+              onClick={() => handleFillDemo("admin")}
+              className="text-indigo-700 hover:underline cursor-pointer"
+            >
+              admin
+            </button>
+            <span>•</span>
+            <button
+              type="button"
+              onClick={() => handleFillDemo("customer")}
+              className="text-blue-700 hover:underline cursor-pointer"
+            >
+              customer
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
