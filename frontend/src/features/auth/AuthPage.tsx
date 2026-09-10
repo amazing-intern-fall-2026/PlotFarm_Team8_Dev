@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { useLocation, useNavigate, Link } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import LoginForm from "../components/LoginForm";
 import RegisterForm from "../components/RegisterForm";
 import { getCurrentUser, getRedirectPathByRole, isAuthenticated, logout } from "./auth.api";
 import { Alert } from "../../components/ui";
+import { useAuth } from "./AuthContext";
 
 interface AuthPageProps {
   initialMode?: "login" | "register";
@@ -12,6 +13,7 @@ interface AuthPageProps {
 export default function AuthPage({ initialMode }: AuthPageProps) {
   const location = useLocation();
   const navigate = useNavigate();
+  const { login: setAuthContext } = useAuth();
   const [currentUser, setCurrentUser] = useState(() =>
     isAuthenticated() ? getCurrentUser() : null,
   );
@@ -28,6 +30,16 @@ export default function AuthPage({ initialMode }: AuthPageProps) {
   function handleLogoutCurrent() {
     logout();
     setCurrentUser(null);
+  }
+
+  function handleGoToRolePage() {
+    if (!currentUser) return;
+
+    const existingToken = localStorage.getItem("token") || "mock-jwt-token";
+    // Ép kiểu (currentUser as any) để sửa dứt điểm lỗi TypeScript
+    setAuthContext(existingToken, currentUser as any);
+    
+    navigate(getRedirectPathByRole(currentUser.role));
   }
 
   return (
@@ -85,12 +97,14 @@ export default function AuthPage({ initialMode }: AuthPageProps) {
                     Đăng xuất
                   </button>
                 </div>
-                <Link
-                  to={getRedirectPathByRole(currentUser.role)}
-                  className="rounded-lg bg-emerald-600 px-2.5 py-1 text-white font-medium hover:bg-emerald-700 transition text-center text-xs"
+              {/* Dùng button gọi hàm handleGoToRolePage thay cho Link */}
+                <button
+                  type="button"
+                  onClick={handleGoToRolePage}
+                  className="rounded-lg bg-emerald-600 px-2.5 py-1 text-white font-medium hover:bg-emerald-700 transition text-center text-xs cursor-pointer w-full"
                 >
                   Vào trang {currentUser.role} →
-                </Link>
+                </button>
               </div>
             </Alert>
           )}
