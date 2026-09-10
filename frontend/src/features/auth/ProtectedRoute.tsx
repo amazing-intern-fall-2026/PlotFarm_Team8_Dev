@@ -1,41 +1,39 @@
-import { type ReactNode } from "react";
+import React from "react";
 import { Navigate, useLocation } from "react-router-dom";
-import { getCurrentUser, getRedirectPathByRole, isAuthenticated } from "./auth.api";
-import type { UserRole } from "./auth.types";
+import { useAuth } from "./AuthContext";
+import { Spinner } from "../../components/ui";
 
 interface ProtectedRouteProps {
-  children: ReactNode;
-  allowedRoles?: UserRole[];
+  children: React.ReactNode;
+  allowedRoles?: ("admin" | "farmer" | "customer")[];
 }
 
-export default function ProtectedRoute({
-  children,
-  allowedRoles,
-}: ProtectedRouteProps) {
+export default function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
+  const { user, token, isLoading } = useAuth();
   const location = useLocation();
 
-  if (!isAuthenticated()) {
-    // Redirect unauthenticated user to login page
+  // 1. Nếu đang kiểm tra thông tin đăng nhập trong localStorage -> Hiện Loading
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="flex flex-col items-center gap-3">
+          <Spinner size="lg" />
+          <p className="text-sm text-gray-500">Đang kiểm tra quyền truy cập...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. Nếu chưa đăng nhập (Không có token hoặc user) -> Chuyển về trang /login
+  if (!token || !user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  const user = getCurrentUser();
-
-  // If role is specified and current user's role is not authorized for this route
-  if (allowedRoles && user) {
-    const userRole = (user.role || "").trim().toLowerCase();
-    const isAllowed = allowedRoles.some(
-      (role) =>
-        userRole === role.toLowerCase() || userRole.includes(role.toLowerCase()),
-    );
-
-    if (!isAllowed) {
-      // Redirect to user's proper role portal
-      return <Navigate to={getRedirectPathByRole(user.role)} replace />;
-    }
+  // 3. Nếu đăng nhập rồi nhưng không đúng Role cho phép -> Chuyển về trang /login (hoặc trang chủ)
+  if (allowedRoles && !allowedRoles.includes(user.role)) {
+    return <Navigate to="/login" replace />;
   }
 
+  // Nếu hợp lệ -> Cho phép xem nội dung bên trong
   return <>{children}</>;
 }
-
-
