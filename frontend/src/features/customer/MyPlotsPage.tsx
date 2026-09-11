@@ -208,8 +208,6 @@ export default function MyPlotsPage() {
   const navigate = useNavigate();
   const [user] = useState(() => getCurrentUser());
 
-  // Rule: chỉ hiển thị Plot thuộc quyền sở hữu của Customer đang đăng nhập.
-  // TODO: khi có API thật, thay MOCK_MY_PLOTS bằng GET /customers/me/plots?status=RENTED
   const [plots, setPlots] = useState<RentedPlot[]>(() => MOCK_MY_PLOTS);
 
   const [cameraPlot, setCameraPlot] = useState<RentedPlot | null>(null);
@@ -243,7 +241,6 @@ export default function MyPlotsPage() {
   }
 
   function handleOpenDiary(plot: RentedPlot) {
-    // TODO: khi có API thật, gọi GET /plots/:plotId/diary thay vì đọc mock
     setDiaryEntries(MOCK_DIARY_BY_PLOT[plot.id] ?? []);
     setDiaryPlot(plot);
   }
@@ -266,7 +263,6 @@ export default function MyPlotsPage() {
 
     setIsSubmittingCareRequest(true);
 
-    // Giả lập gọi API tạo Care Request (status = PENDING)
     setTimeout(() => {
       const typeLabel = CARE_REQUEST_TYPES.find((t) => t.value === careType)?.label ?? "";
 
@@ -277,10 +273,6 @@ export default function MyPlotsPage() {
             : p,
         ),
       );
-
-      // TODO: Khi có API thật — gọi API tạo Care Request, ví dụ:
-      // await api.post(`/plots/${careRequestPlot.id}/care-requests`, { type: careType, description: careDescription });
-      // Backend chịu trách nhiệm gán request đến đúng Farmer đang phụ trách Plot.
 
       setIsSubmittingCareRequest(false);
       setCareRequestPlot(null);
@@ -308,16 +300,37 @@ export default function MyPlotsPage() {
       <main className="flex-1 py-8">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-6">
           {/* Header */}
-          <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Ô đất của tôi</h1>
               <p className="mt-1 text-sm text-gray-500">
                 Theo dõi tiến độ canh tác, xem camera trực tiếp và gửi yêu cầu chăm sóc cho các ô đất bạn đang thuê.
               </p>
             </div>
-            <Badge variant="success" size="md">
-              Đang thuê: {totalRented} ô đất
-            </Badge>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                variant="outline"
+                size="sm"
+                fullWidth={false}
+                onClick={() => navigate("/customer")}
+              >
+                ← Quay lại Trang chủ
+              </Button>
+
+              <Button
+                variant="primary"
+                size="sm"
+                fullWidth={false}
+                onClick={() => navigate("/customer/farms")}
+              >
+                Khám phá Nông Trại
+              </Button>
+
+              <Badge variant="success" size="md">
+                Đang thuê: {totalRented} ô đất
+              </Badge>
+            </div>
           </div>
 
           {careRequestSuccessMessage && (
@@ -396,7 +409,15 @@ export default function MyPlotsPage() {
                   title="Bạn chưa thuê ô đất nào"
                   description="Khám phá các nông trại đang có ô đất trống để bắt đầu canh tác từ xa."
                 />
-                <div className="flex justify-center">
+                <div className="flex justify-center gap-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    fullWidth={false}
+                    onClick={() => navigate("/customer")}
+                  >
+                    ← Quay lại Trang chủ
+                  </Button>
                   <Button
                     variant="primary"
                     size="sm"
@@ -439,7 +460,6 @@ export default function MyPlotsPage() {
         {cameraPlot && (
           <div className="space-y-3 text-sm">
             <div className="flex aspect-video w-full items-center justify-center rounded-lg bg-gray-900 text-gray-300">
-              {/* TODO: nhúng player stream thật (HLS/RTSP-over-WebRTC) tại đây */}
               <div className="text-center">
                 <p className="text-sm">📡 Đang kết nối luồng camera...</p>
                 <p className="mt-1 text-xs text-gray-400">
@@ -515,7 +535,6 @@ export default function MyPlotsPage() {
       >
         {careRequestPlot && (
           <div className="space-y-4 text-sm">
-            {/* Thông tin Plot đã chọn */}
             <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
               <div className="flex items-center justify-between">
                 <span className="font-semibold text-gray-900">{careRequestPlot.code}</span>
@@ -533,7 +552,6 @@ export default function MyPlotsPage() {
               </p>
             </div>
 
-            {/* Dropdown loại yêu cầu */}
             <div className="space-y-1.5">
               <label className="block text-xs font-medium text-gray-700">Loại yêu cầu</label>
               <select
@@ -553,7 +571,6 @@ export default function MyPlotsPage() {
               </select>
             </div>
 
-            {/* Mô tả chi tiết */}
             <div className="space-y-1.5">
               <label className="block text-xs font-medium text-gray-700">Mô tả chi tiết</label>
               <textarea
