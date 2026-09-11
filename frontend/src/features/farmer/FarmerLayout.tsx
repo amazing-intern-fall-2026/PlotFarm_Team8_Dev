@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { getCurrentUser, logout } from "../auth/auth.api";
+import { useAuth } from "../auth/AuthContext";
 import { Sidebar, type SidebarMenuItem } from "../../components/layout";
 import FarmerDashboard from "./FarmerDashboard";
 import FarmerPlots from "./FarmerPlots";
@@ -16,7 +17,8 @@ export type FarmerTab = "dashboard" | "plots" | "logs" | "requests" | "harvest" 
 export default function FarmerLayout() {
   const navigate = useNavigate();
   const location = useLocation();
-  const user = getCurrentUser();
+  const { user: authUser, logout: authLogout } = useAuth();
+  const user = authUser || getCurrentUser();
 
   const [activeProfile, setActiveProfile] = useState<FarmerProfileData>(() =>
     farmerService.getFarmerProfile(),
@@ -59,6 +61,7 @@ export default function FarmerLayout() {
   }
 
   function handleLogout() {
+    authLogout();
     logout();
     navigate("/login", { replace: true });
   }
@@ -110,8 +113,8 @@ export default function FarmerLayout() {
         isOpenMobile={isMobileSidebarOpen}
         onToggleMobile={setIsMobileSidebarOpen}
         user={{
-          name: activeProfile.name || user?.fullName || "Nông Dân",
-          emailOrStatus: `${activeProfile.assignedFarms[0] || "Trực đồng ruộng"}`,
+          name: user?.fullName || activeProfile.name || "Nông Dân",
+          emailOrStatus: user?.email || `${activeProfile.assignedFarms[0] || "Trực đồng ruộng"}`,
           avatarText: activeProfile.avatarIcon || "👨‍🌾",
         }}
         extraFooterWidget={
