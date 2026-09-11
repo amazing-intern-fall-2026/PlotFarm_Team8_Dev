@@ -10,9 +10,12 @@ export type PlantGrowthStage =
 export interface FarmerPlotItem {
   id: string;
   assignedFarmerId: string; // ID of the farmer assigned by Admin (e.g., NV0001, NV0002)
+  farmerName?: string;
+  farmId?: string;
   farmName: string;
   plotCode: string;
   plotStatus: PlotStatus;
+  customerId?: string;
   customerName: string;
   contractId: string;
   plantCrop: string;
@@ -22,6 +25,16 @@ export interface FarmerPlotItem {
   progress: number; // 0 to 100
   lastUpdate: string;
   areaSquareMeter: number;
+  rentalPricePerMonth?: number;
+  sensorData?: {
+    moisture: number;
+    temperature: number;
+    soilPh: number;
+    lightLux: number;
+    lastUpdated: string;
+  };
+  cameraFeedUrl?: string;
+  plotThumbnail?: string;
 }
 
 export interface FarmingLogItem {
@@ -41,6 +54,7 @@ export interface CareRequestItem {
   id: string;
   plot: string;
   customer: string;
+  customerId?: string;
   requestType: string;
   description: string;
   createdDate: string;
@@ -58,6 +72,7 @@ export interface HarvestItem {
   id: string;
   plot: string;
   customer: string;
+  customerId?: string;
   plantCrop: string;
   expectedHarvestDate: string;
   actualHarvestDate?: string;
@@ -67,6 +82,8 @@ export interface HarvestItem {
   note?: string;
   packageStatus: PackageStatus;
   deliveryStatus: DeliveryStatus;
+  deliveryAddress?: string;
+  trackingCode?: string;
 }
 
 export interface FarmerProfileData {

@@ -21,14 +21,20 @@ export default function FarmerLayout() {
   const [activeProfile, setActiveProfile] = useState<FarmerProfileData>(() =>
     farmerService.getFarmerProfile(),
   );
+  const [, setTick] = useState(0);
 
-  // Sync state whenever farmer is switched
+  // Sync state whenever farmer is switched or data changed
   useEffect(() => {
-    function handleFarmerChange() {
+    function handleSync() {
       setActiveProfile(farmerService.getFarmerProfile());
+      setTick((t) => t + 1);
     }
-    window.addEventListener("pf_farmer_changed", handleFarmerChange);
-    return () => window.removeEventListener("pf_farmer_changed", handleFarmerChange);
+    window.addEventListener("pf_farmer_changed", handleSync);
+    window.addEventListener("pf_data_changed", handleSync);
+    return () => {
+      window.removeEventListener("pf_farmer_changed", handleSync);
+      window.removeEventListener("pf_data_changed", handleSync);
+    };
   }, []);
 
   // Determine active tab directly from URL pathname

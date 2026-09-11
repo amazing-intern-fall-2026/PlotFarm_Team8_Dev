@@ -11,13 +11,16 @@ export default function FarmerPlots() {
   const [selectedStatus, setSelectedStatus] = useState<string>("ALL");
 
   useEffect(() => {
-    function handleFarmerChange() {
+    function handleSync() {
       setProfile(farmerService.getFarmerProfile());
       setPlots(farmerService.getPlots());
-      setSelectedFarm("ALL");
     }
-    window.addEventListener("pf_farmer_changed", handleFarmerChange);
-    return () => window.removeEventListener("pf_farmer_changed", handleFarmerChange);
+    window.addEventListener("pf_farmer_changed", handleSync);
+    window.addEventListener("pf_data_changed", handleSync);
+    return () => {
+      window.removeEventListener("pf_farmer_changed", handleSync);
+      window.removeEventListener("pf_data_changed", handleSync);
+    };
   }, []);
 
   // Edit Modal State
