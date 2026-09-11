@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { getCurrentUser, logout } from "../auth/auth.api";
+import { useAuth } from "../auth/AuthContext";
 import { Navbar } from "../../components/layout";
 import { Card, Badge, Button, StatCard, EmptyState, Modal, Alert } from "../../components/ui";
 import { customerService } from "./customer.service";
@@ -9,7 +10,8 @@ import type { SharedFarmItem, SharedPlotItem } from "./customer.types";
 export default function FarmDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [user] = useState(() => getCurrentUser());
+  const { user: authUser, logout: authLogout } = useAuth();
+  const user = authUser || getCurrentUser();
   const [farmData, setFarmData] = useState<{ farm: SharedFarmItem; plots: SharedPlotItem[] } | null>(() => {
     if (!id) return null;
     return customerService.getFarmDetail(id) || null;
@@ -33,6 +35,7 @@ export default function FarmDetailPage() {
   }, [id]);
 
   function handleLogout() {
+    authLogout();
     logout();
     navigate("/login", { replace: true });
   }

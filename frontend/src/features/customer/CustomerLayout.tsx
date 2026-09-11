@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { getCurrentUser, logout } from "../auth/auth.api";
+import { useAuth } from "../auth/AuthContext";
 import { Sidebar, type SidebarMenuItem } from "../../components/layout";
 import CustomerDashboard from "./CustomerDashboard";
 import CustomerPlots from "./CustomerPlots";
@@ -14,7 +15,8 @@ import type { CustomerTab, SharedCustomerProfile } from "./customer.types";
 export default function CustomerLayout() {
   const navigate = useNavigate();
   const location = useLocation();
-  const user = getCurrentUser();
+  const { user: authUser, logout: authLogout } = useAuth();
+  const user = authUser || getCurrentUser();
 
   const [activeCustomer, setActiveCustomer] = useState<SharedCustomerProfile>(() =>
     customerService.getActiveCustomerProfile(),
@@ -56,6 +58,7 @@ export default function CustomerLayout() {
   }
 
   function handleLogout() {
+    authLogout();
     logout();
     navigate("/login", { replace: true });
   }
@@ -118,8 +121,8 @@ export default function CustomerLayout() {
         isOpenMobile={isMobileSidebarOpen}
         onToggleMobile={setIsMobileSidebarOpen}
         user={{
-          name: activeCustomer.name || user?.fullName || "Khách Hàng",
-          emailOrStatus: activeCustomer.email || "customer@plotfarm.com",
+          name: user?.fullName || activeCustomer.name || user?.username || "Khách Hàng",
+          emailOrStatus: user?.email || activeCustomer.email || "customer@plotfarm.com",
           avatarText: activeCustomer.avatarIcon || "👨‍💼",
         }}
         extraFooterWidget={

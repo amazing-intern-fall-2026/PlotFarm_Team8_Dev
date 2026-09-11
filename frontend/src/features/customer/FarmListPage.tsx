@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { getCurrentUser, logout } from "../auth/auth.api";
+import { useAuth } from "../auth/AuthContext";
 import { Navbar } from "../../components/layout";
 import { Card, Badge, Button, Input, EmptyState } from "../../components/ui";
 import { customerService } from "./customer.service";
@@ -16,7 +17,8 @@ export default function FarmListPage({
   onSelectFarm,
 }: FarmListPageProps) {
   const navigate = useNavigate();
-  const [user] = useState(() => getCurrentUser());
+  const { user: authUser, logout: authLogout } = useAuth();
+  const user = authUser || getCurrentUser();
   const [searchTerm, setSearchTerm] = useState("");
   const [farms, setFarms] = useState<SharedFarmItem[]>(() =>
     customerService.getAllFarms(),
@@ -42,6 +44,7 @@ export default function FarmListPage({
   }, [farms, searchTerm]);
 
   function handleLogout() {
+    authLogout();
     logout();
     navigate("/login", { replace: true });
   }
