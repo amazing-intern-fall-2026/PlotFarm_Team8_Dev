@@ -6,19 +6,24 @@ import sql from 'mssql';
 import { AppError } from '../utils/AppError.js';
 import { runInTransaction } from '../utils/transactionHelper.js';
 import * as authRepo from '../repositories/authRepository.js';
+import { JWT_SECRET, JWT_EXPIRES_IN, BCRYPT_SALT_ROUNDS } from '../config/config.js';
 
 /** Register a new customer and linked account inside a transaction */
 export const registerUser = async (payload) => {
   const { fullName, email, phone, shippingAddress, username, password } = payload;
   
   return runInTransaction(async (transaction) => {
-    // Check duplicate username
-    const existingUsername = await authRepo.findAccountByUsername(username);
+    // Check duplicate username inside transaction
+    const existingUsername = await authRepo.findAccountByUsername(username, transaction);
     if (existingUsername) throw new AppError('Username already exists', 409);
 
-    // Check duplicate email
-    const existingEmail = await authRepo.findCustomerByEmail(email);
+    // Check duplicate email inside transaction
+    const existingEmail = await authRepo.findCustomerByEmail(email, transaction);
     if (existingEmail) throw new AppError('Email already exists', 409);
+
+    // Check duplicate phone inside transaction
+    const existingPhone = await authRepo.findCustomerByPhone(phone, transaction);
+    if (existingPhone) throw new AppError('Phone number already exists', 409);
 
     // Create customer inside transaction
     const customerId = await authRepo.createCustomer({
@@ -29,8 +34,7 @@ export const registerUser = async (payload) => {
     }, transaction);
 
     // Hash password
-    const saltRounds = parseInt(process.env.BCRYPT_SALT_ROUNDS, 10) || 10;
-    const passwordHash = await bcrypt.hash(password, saltRounds);
+    const passwordHash = await bcrypt.hash(password, BCRYPT_SALT_ROUNDS);
 
     // Create account (role CUSTOMER) inside transaction
     await authRepo.createAccountForCustomer({
@@ -49,9 +53,17 @@ export const registerEmployee = async (payload) => {
   const { fullName, email, phone, username, password, role } = payload;
   
   return runInTransaction(async (transaction) => {
-    // Check duplicate username
-    const existingUsername = await authRepo.findAccountByUsername(username);
+    // Check duplicate username inside transaction
+    const existingUsername = await authRepo.findAccountByUsername(username, transaction);
     if (existingUsername) throw new AppError('Username already exists', 409);
+
+    // Check duplicate email inside transaction
+    const existingEmail = await authRepo.findEmployeeByEmail(email, transaction);
+    if (existingEmail) throw new AppError('Email already exists', 409);
+
+    // Check duplicate phone inside transaction
+    const existingPhone = await authRepo.findEmployeeByPhone(phone, transaction);
+    if (existingPhone) throw new AppError('Phone number already exists', 409);
 
     // Create employee inside transaction
     const employeeId = await authRepo.createEmployee({
@@ -62,8 +74,7 @@ export const registerEmployee = async (payload) => {
     }, transaction);
 
     // Hash password
-    const saltRounds = parseInt(process.env.BCRYPT_SALT_ROUNDS, 10) || 10;
-    const passwordHash = await bcrypt.hash(password, saltRounds);
+    const passwordHash = await bcrypt.hash(password, BCRYPT_SALT_ROUNDS);
 
     // Create account inside transaction
     await authRepo.createAccountForEmployee({
@@ -92,8 +103,8 @@ export const loginUser = async ({ username, password }) => {
     userType: userInfo.type,
     role: account.MaVaiTro,
   };
-  const token = jwt.sign(payload, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRES_IN || '1d',
+  const token = jwt.sign(payload, JWT_SECRET, {
+    expiresIn: JWT_EXPIRES_IN,
   });
   return {
     accessToken: token,

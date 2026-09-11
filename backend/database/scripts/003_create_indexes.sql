@@ -1,14 +1,31 @@
 -- 003_create_indexes.sql
--- Indexes for foreign keys and filtered unique indexes
+-- Indexes for foreign keys and query optimization
+-- Idempotent script: Safe to re-run multiple times
 
--- Indexes for foreign keys
-CREATE INDEX IX_TAIKHOAN_VAITRO ON dbo.TAIKHOAN (MaVaiTro);
-CREATE INDEX IX_TAIKHOAN_KHACHHANG ON dbo.TAIKHOAN (MaKH);
-CREATE INDEX IX_TAIKHOAN_NHANVIEN ON dbo.TAIKHOAN (MaNV);
-CREATE INDEX IX_NONGTRAI_CHUNONGTRAI ON dbo.NONGTRAI (MaChuNongTrai);
+-- Indexes for TAIKHOAN foreign keys
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_TAIKHOAN_VAITRO' AND object_id = OBJECT_ID(N'dbo.TAIKHOAN'))
+    CREATE INDEX IX_TAIKHOAN_VAITRO ON dbo.TAIKHOAN (MaVaiTro);
 
--- Filtered unique indexes (example for nullable columns)
--- Assuming MaVanDon is nullable in THONGBAO (not defined here), example syntax:
--- CREATE UNIQUE INDEX IX_THONGBAO_MaVanDon ON dbo.THONGBAO (MaVanDon) WHERE MaVanDon IS NOT NULL;
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_TAIKHOAN_KHACHHANG' AND object_id = OBJECT_ID(N'dbo.TAIKHOAN'))
+    CREATE INDEX IX_TAIKHOAN_KHACHHANG ON dbo.TAIKHOAN (MaKH);
 
--- Additional indexes for commonly queried columns can be added as needed.
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_TAIKHOAN_NHANVIEN' AND object_id = OBJECT_ID(N'dbo.TAIKHOAN'))
+    CREATE INDEX IX_TAIKHOAN_NHANVIEN ON dbo.TAIKHOAN (MaNV);
+
+-- Indexes for NONGTRAI foreign keys
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_NONGTRAI_CHUNONGTRAI' AND object_id = OBJECT_ID(N'dbo.NONGTRAI'))
+    CREATE INDEX IX_NONGTRAI_CHUNONGTRAI ON dbo.NONGTRAI (MaChuNongTrai);
+
+-- Indexes for ODAT foreign keys
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_ODAT_NONGTRAI' AND object_id = OBJECT_ID(N'dbo.ODAT'))
+    CREATE INDEX IX_ODAT_NONGTRAI ON dbo.ODAT (MaNongTrai);
+
+-- Indexes for HOPDONGTHUE foreign keys
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_HOPDONG_KHACHHANG' AND object_id = OBJECT_ID(N'dbo.HOPDONGTHUE'))
+    CREATE INDEX IX_HOPDONG_KHACHHANG ON dbo.HOPDONGTHUE (MaKH);
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_HOPDONG_ODAT' AND object_id = OBJECT_ID(N'dbo.HOPDONGTHUE'))
+    CREATE INDEX IX_HOPDONG_ODAT ON dbo.HOPDONGTHUE (MaODat);
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_HOPDONG_CAYTRONG' AND object_id = OBJECT_ID(N'dbo.HOPDONGTHUE'))
+    CREATE INDEX IX_HOPDONG_CAYTRONG ON dbo.HOPDONGTHUE (MaCayTrong);
