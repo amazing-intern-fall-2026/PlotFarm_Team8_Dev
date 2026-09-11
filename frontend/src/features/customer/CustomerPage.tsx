@@ -68,7 +68,11 @@ export default function CustomerPage() {
   ]);
 
   function handleGoToFarmList() {
-  navigate("/customer/farms");
+    navigate("/customer/farms");
+  }
+
+  function handleGoToMyPlots() {
+    navigate("/customer/my-plots");
   }
 
   function handleLogout() {
@@ -157,6 +161,15 @@ export default function CustomerPage() {
                   size="sm"
                   fullWidth={false}
                   className="bg-emerald-600/50 border border-emerald-400/40 text-emerald-700 hover:bg-emerald-600"
+                  onClick={handleGoToMyPlots}
+                >
+                  🌱 Ô Đất Của Tôi
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  fullWidth={false}
+                  className="bg-emerald-600/50 border border-emerald-400/40 text-emerald-700 hover:bg-emerald-600"
                   onClick={() => setIsWeatherModalOpen(true)}
                 >
                   Xem Báo Cáo Thời Tiết
@@ -169,25 +182,32 @@ export default function CustomerPage() {
                   onClick={handleGoToFarmList}
                 >
                   Danh sách Nông Trại
-</Button>
+                </Button>
               </div>
             </div>
           </div>
 
           {/* Stats Grid using StatCard */}
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard
-              title="Thửa đất sở hữu"
-              value={`${plots.length} Thửa`}
-              subtext="Tổng diện tích: 12.500 m²"
-              subtextClassName="text-emerald-600 font-medium"
-              icon={
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-                </svg>
-              }
-              iconBgColor="bg-emerald-100 text-emerald-600"
-            />
+            <button
+              type="button"
+              onClick={handleGoToMyPlots}
+              className="text-left"
+            >
+              <StatCard
+                title="Thửa đất sở hữu"
+                value={`${plots.length} Thửa`}
+                subtext="Tổng diện tích: 12.500 m² • Bấm để xem chi tiết"
+                subtextClassName="text-emerald-600 font-medium"
+                icon={
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                  </svg>
+                }
+                iconBgColor="bg-emerald-100 text-emerald-600"
+                className="hover:border-emerald-300 cursor-pointer"
+              />
+            </button>
 
             <StatCard
               title="Mùa vụ hiện tại"
@@ -236,7 +256,14 @@ export default function CustomerPage() {
               <h2 className="text-base font-semibold text-gray-900">
                 Danh sách Thửa Đất của bạn
               </h2>
-              <span className="text-xs text-gray-500">Cập nhật lúc: 13:40 hôm nay</span>
+              <Button
+                variant="outline"
+                size="sm"
+                fullWidth={false}
+                onClick={handleGoToMyPlots}
+              >
+                Xem chi tiết & Camera →
+              </Button>
             </div>
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200 text-left text-sm">

@@ -7,6 +7,7 @@ import AdminLayout from "./features/admin/AdminLayout";
 import { getCurrentUser, getRedirectPathByRole, isAuthenticated } from "./features/auth/auth.api";
 import FarmListPage from "./features/customer/FarmListPage";
 import FarmDetailPage from "./features/customer/FarmDetailPage";
+import MyPlotsPage from "./features/customer/MyPlotsPage";
 
 export default function App() {
   function getDefaultRedirect() {
@@ -82,6 +83,14 @@ export default function App() {
           <ProtectedRoute allowedRoles={["customer"]}>
           <FarmDetailPage />
         </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/customer/my-plots"
+        element={
+          <ProtectedRoute allowedRoles={["customer"]}>
+            <MyPlotsPage />
+          </ProtectedRoute>
         }
       />
       <Route
