@@ -10,12 +10,15 @@ const toBoolean = (value) => {
 };
 
 // Validate required DB environment variables (do not log passwords)
-const requiredVars = ["DB_SERVER", "DB_NAME", "DB_USER", "DB_PASSWORD"];
-for (const varName of requiredVars) {
-  if (!process.env[varName]) {
-    throw new Error(`Missing required environment variable: ${varName}`);
+if (process.env.NODE_ENV !== 'test') {
+  const requiredVars = ["DB_SERVER", "DB_NAME", "DB_USER", "DB_PASSWORD"];
+  for (const varName of requiredVars) {
+    if (!process.env[varName]) {
+      throw new Error(`Missing required environment variable: ${varName}`);
+    }
   }
 }
+
 
 // Process optional DB_PORT and support named instances
 const serverEnv = process.env.DB_SERVER;
@@ -38,8 +41,20 @@ export const DB_CONFIG = {
   server: serverEnv,
   database: process.env.DB_NAME,
   ...(port !== undefined ? { port } : {}),
+  requestTimeout: 15000,
+  pool: {
+    max: 10,
+    min: 2,
+    idleTimeoutMillis: 30000,
+  },
   options: {
     encrypt: toBoolean(process.env.DB_ENCRYPT),
     trustServerCertificate: toBoolean(process.env.DB_TRUST_SERVER_CERTIFICATE),
   },
 };
+
+export const NODE_ENV = process.env.NODE_ENV || 'development';
+export const JWT_SECRET = process.env.JWT_SECRET || 'plotfarm_jwt_secret_key_default_2026';
+export const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '1d';
+export const BCRYPT_SALT_ROUNDS = parseInt(process.env.BCRYPT_SALT_ROUNDS, 10) || 10;
+
