@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { getCurrentUser, logout } from "../auth/auth.api";
 import { Navbar } from "../../components/layout";
-import { Card, Badge, Button, StatCard, EmptyState } from "../../components/ui";
+import { Card, Badge, Button, StatCard, EmptyState, Modal } from "../../components/ui";
 
 interface Farm {
   id: string;
@@ -15,7 +15,25 @@ interface Farm {
   createdAt: string;
 }
 
-// Mock data - sau này thay bằng gọi API theo farmId
+type PlotStatus = "AVAILABLE" | "RENTED";
+
+interface Plot {
+  id: string;
+  code: string;
+  area: string;
+  pricePerMonth: number; // đơn vị VNĐ, để tiện tính toán
+  status: PlotStatus;
+  suitableCrops: string[];
+}
+
+const RENTAL_DURATIONS = [
+  { label: "3 tháng", months: 3 },
+  { label: "6 tháng", months: 6 },
+  { label: "12 tháng", months: 12 },
+];
+
+/* ================== MOCK DATA ================== */
+
 const MOCK_FARMS: Record<string, Farm> = {
   "1": {
     id: "1",
@@ -41,6 +59,94 @@ const MOCK_FARMS: Record<string, Farm> = {
   },
 };
 
+const MOCK_PLOTS_BY_FARM: Record<string, Plot[]> = {
+  "1": [
+    {
+      id: "p1",
+      code: "PLOT-A1",
+      area: "50m²",
+      pricePerMonth: 1500000,
+      status: "AVAILABLE",
+      suitableCrops: ["Dưa lưới", "Cà chua Cherry"],
+    },
+    {
+      id: "p2",
+      code: "PLOT-A2",
+      area: "50m²",
+      pricePerMonth: 1500000,
+      status: "RENTED",
+      suitableCrops: ["Dưa lưới", "Rau xà lách"],
+    },
+    {
+      id: "p3",
+      code: "PLOT-A3",
+      area: "80m²",
+      pricePerMonth: 2200000,
+      status: "AVAILABLE",
+      suitableCrops: ["Cà chua Cherry", "Dâu tây"],
+    },
+    {
+      id: "p4",
+      code: "PLOT-B1",
+      area: "100m²",
+      pricePerMonth: 2800000,
+      status: "AVAILABLE",
+      suitableCrops: ["Rau củ hữu cơ", "Dưa leo"],
+    },
+    {
+      id: "p5",
+      code: "PLOT-B2",
+      area: "60m²",
+      pricePerMonth: 1800000,
+      status: "RENTED",
+      suitableCrops: ["Rau xà lách", "Cải bó xôi"],
+    },
+    {
+      id: "p6",
+      code: "PLOT-B3",
+      area: "50m²",
+      pricePerMonth: 1500000,
+      status: "AVAILABLE",
+      suitableCrops: ["Dưa lưới"],
+    },
+  ],
+  "2": [
+    {
+      id: "p7",
+      code: "PLOT-C1",
+      area: "70m²",
+      pricePerMonth: 2000000,
+      status: "AVAILABLE",
+      suitableCrops: ["Cà phê Robusta"],
+    },
+    {
+      id: "p8",
+      code: "PLOT-C2",
+      area: "70m²",
+      pricePerMonth: 2000000,
+      status: "RENTED",
+      suitableCrops: ["Cà phê Robusta"],
+    },
+  ],
+};
+
+const CROP_OPTIONS = [
+  "Dưa lưới",
+  "Cà chua Cherry",
+  "Rau xà lách",
+  "Dâu tây",
+  "Rau củ hữu cơ",
+  "Dưa leo",
+  "Cải bó xôi",
+  "Cà phê Robusta",
+];
+
+function formatCurrency(value: number) {
+  return `${value.toLocaleString("vi-VN")}đ`;
+}
+
+/* ================== COMPONENT ================== */
+
 export default function FarmDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -48,9 +154,67 @@ export default function FarmDetailPage() {
 
   const farm = id ? MOCK_FARMS[id] : undefined;
 
+  const [plots, setPlots] = useState<Plot[]>(() =>
+    id ? MOCK_PLOTS_BY_FARM[id] ?? [] : [],
+  );
+
+  const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
+  const [selectedPlot, setSelectedPlot] = useState<Plot | null>(null);
+  const [selectedCrop, setSelectedCrop] = useState(CROP_OPTIONS[0]);
+  const [selectedDurationMonths, setSelectedDurationMonths] = useState(
+    RENTAL_DURATIONS[0].months,
+  );
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [bookingSuccessMessage, setBookingSuccessMessage] = useState<string | null>(null);
+
+  const totalPrice = useMemo(() => {
+    if (!selectedPlot) return 0;
+    return selectedPlot.pricePerMonth * selectedDurationMonths;
+  }, [selectedPlot, selectedDurationMonths]);
+
   function handleLogout() {
     logout();
     navigate("/login", { replace: true });
+  }
+
+  function handleOpenBookingModal(plot: Plot) {
+    if (plot.status !== "AVAILABLE") return; // Rule: không thể thuê Plot đã RENTED
+    setSelectedPlot(plot);
+    setSelectedCrop(plot.suitableCrops[0] ?? CROP_OPTIONS[0]);
+    setSelectedDurationMonths(RENTAL_DURATIONS[0].months);
+    setIsBookingModalOpen(true);
+  }
+
+  function handleCloseBookingModal() {
+    if (isProcessingPayment) return;
+    setIsBookingModalOpen(false);
+    setSelectedPlot(null);
+  }
+
+  function handleConfirmPayment() {
+    if (!selectedPlot) return;
+
+    setIsProcessingPayment(true);
+
+    // Giả lập gọi API thanh toán (PAYMENT = PAID)
+    setTimeout(() => {
+      setPlots((prev) =>
+        prev.map((p) =>
+          p.id === selectedPlot.id ? { ...p, status: "RENTED" } : p,
+        ),
+      );
+
+      // TODO: Khi có API thật — gọi API thêm Plot này vào danh sách
+      // "Thửa đất của tôi" ở CustomerPage, ví dụ:
+      // await api.post("/customer/plots", { plotId: selectedPlot.id, cropType: selectedCrop, durationMonths: selectedDurationMonths });
+
+      setIsProcessingPayment(false);
+      setIsBookingModalOpen(false);
+      setBookingSuccessMessage(
+        `Thuê thành công ${selectedPlot.code} — cây trồng "${selectedCrop}" trong ${selectedDurationMonths} tháng! Thửa đất đã được thêm vào danh sách của bạn.`,
+      );
+      setSelectedPlot(null);
+    }, 1200);
   }
 
   return (
@@ -103,6 +267,18 @@ export default function FarmDetailPage() {
             </Card>
           ) : (
             <>
+              {bookingSuccessMessage && (
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 flex items-start justify-between gap-3">
+                  <span>{bookingSuccessMessage}</span>
+                  <button
+                    onClick={() => setBookingSuccessMessage(null)}
+                    className="text-emerald-600 hover:text-emerald-800 shrink-0"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+
               {/* Banner thông tin nông trại */}
               <div className="rounded-2xl bg-linear-to-r from-emerald-700 via-teal-700 to-emerald-800 p-6 sm:p-8 text-white shadow-lg">
                 <div className="flex flex-wrap items-start justify-between gap-4">
@@ -171,8 +347,8 @@ export default function FarmDetailPage() {
                   }
                 />
                 <StatCard
-                  title="Số thửa đất"
-                  value={`${farm.plotCount} Thửa`}
+                  title="Tổng số thửa"
+                  value={`${plots.length} Thửa`}
                   iconBgColor="bg-amber-100 text-amber-600"
                   icon={
                     <svg
@@ -191,9 +367,10 @@ export default function FarmDetailPage() {
                   }
                 />
                 <StatCard
-                  title="Ngày tạo"
-                  value={farm.createdAt}
-                  iconBgColor="bg-gray-100 text-gray-600"
+                  title="Còn trống"
+                  value={`${plots.filter((p) => p.status === "AVAILABLE").length} Thửa`}
+                  valueClassName="text-emerald-600"
+                  iconBgColor="bg-emerald-100 text-emerald-600"
                   icon={
                     <svg
                       className="h-5 w-5"
@@ -205,34 +382,224 @@ export default function FarmDetailPage() {
                         strokeLinecap="round"
                         strokeLinejoin="round"
                         strokeWidth="2"
-                        d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                        d="M5 13l4 4L19 7"
                       />
                     </svg>
                   }
                 />
               </div>
 
-              {/* Khu vực mở rộng: danh sách thửa đất thuộc nông trại này */}
+              {/* Plot Grid */}
               <Card>
                 <div className="border-b border-gray-200 px-6 py-4 flex items-center justify-between">
                   <h2 className="text-base font-semibold text-gray-900">
                     Danh sách Thửa Đất trong Nông Trại
                   </h2>
-                  <Button variant="outline" size="sm" fullWidth={false}>
-                    + Thêm thửa đất
-                  </Button>
+                  <span className="text-xs text-gray-500">
+                    {plots.filter((p) => p.status === "AVAILABLE").length}/
+                    {plots.length} thửa còn trống
+                  </span>
                 </div>
-                <div className="p-6">
-                  <p className="text-sm text-gray-500">
-                    (Chưa có dữ liệu — có thể tích hợp API danh sách thửa đất
-                    theo <code>farmId = {farm.id}</code> tại đây.)
-                  </p>
-                </div>
+
+                {plots.length === 0 ? (
+                  <div className="p-8">
+                    <EmptyState
+                      title="Chưa có thửa đất nào"
+                      description="Nông trại này hiện chưa có dữ liệu thửa đất."
+                    />
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-4 p-6 sm:grid-cols-2 lg:grid-cols-3">
+                    {plots.map((plot) => {
+                      const isAvailable = plot.status === "AVAILABLE";
+                      return (
+                        <div
+                          key={plot.id}
+                          className={`rounded-xl border p-4 transition-all ${
+                            isAvailable
+                              ? "border-emerald-200 bg-white hover:shadow-md"
+                              : "border-gray-200 bg-gray-50 opacity-70"
+                          }`}
+                        >
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <p className="font-semibold text-gray-900">
+                                {plot.code}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                Diện tích: {plot.area}
+                              </p>
+                            </div>
+                            <Badge
+                              variant={isAvailable ? "success" : "warning"}
+                              size="sm"
+                              className={
+                                isAvailable
+                                  ? ""
+                                  : "bg-gray-200 text-gray-600"
+                              }
+                            >
+                              {isAvailable ? "CÒN TRỐNG" : "ĐÃ THUÊ"}
+                            </Badge>
+                          </div>
+
+                          <div className="mt-3">
+                            <p className="text-lg font-bold text-emerald-700">
+                              {formatCurrency(plot.pricePerMonth)}
+                              <span className="text-xs font-normal text-gray-500">
+                                {" "}
+                                / tháng
+                              </span>
+                            </p>
+                          </div>
+
+                          <div className="mt-3">
+                            <p className="text-xs text-gray-500 mb-1.5">
+                              Cây trồng gợi ý:
+                            </p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {plot.suitableCrops.map((crop) => (
+                                <span
+                                  key={crop}
+                                  className="rounded-full bg-emerald-50 px-2 py-0.5 text-2xs text-emerald-700 border border-emerald-100"
+                                >
+                                  {crop}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="mt-4">
+                            {isAvailable ? (
+                              <Button
+                                variant="primary"
+                                size="sm"
+                                onClick={() => handleOpenBookingModal(plot)}
+                              >
+                                Thuê ngay
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled
+                                className="cursor-not-allowed"
+                              >
+                                Đã thuê
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </Card>
             </>
           )}
         </div>
       </main>
+
+      {/* Modal Đặt thuê & Thanh toán */}
+      <Modal
+        isOpen={isBookingModalOpen}
+        onClose={handleCloseBookingModal}
+        title="Đặt thuê thửa đất"
+        description="Xác nhận thông tin thuê đất và tiến hành thanh toán."
+        footer={
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              fullWidth={false}
+              onClick={handleCloseBookingModal}
+              disabled={isProcessingPayment}
+            >
+              Hủy bỏ
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              fullWidth={false}
+              onClick={handleConfirmPayment}
+              loading={isProcessingPayment}
+              loadingText="Đang xử lý thanh toán..."
+            >
+              Xác nhận Thanh toán Online
+            </Button>
+          </>
+        }
+      >
+        {selectedPlot && (
+          <div className="space-y-4 text-sm">
+            {/* Thông tin Plot đã chọn */}
+            <div className="rounded-lg border border-gray-200 p-3 bg-gray-50">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-gray-900">
+                  {selectedPlot.code}
+                </span>
+                <Badge variant="success" size="sm">
+                  CÒN TRỐNG
+                </Badge>
+              </div>
+              <p className="mt-1 text-xs text-gray-500">
+                Diện tích: {selectedPlot.area} • Đơn giá:{" "}
+                {formatCurrency(selectedPlot.pricePerMonth)}/tháng
+              </p>
+            </div>
+
+            {/* Dropdown chọn cây trồng */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-medium text-gray-700">
+                Loại cây muốn trồng
+              </label>
+              <select
+                value={selectedCrop}
+                onChange={(e) => setSelectedCrop(e.target.value)}
+                disabled={isProcessingPayment}
+                className="w-full rounded-lg border border-gray-300 p-2.5 text-xs bg-white focus:border-emerald-600 focus:outline-none disabled:opacity-60"
+              >
+                {CROP_OPTIONS.map((crop) => (
+                  <option key={crop} value={crop}>
+                    {crop}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Dropdown chọn thời gian thuê */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-medium text-gray-700">
+                Thời gian thuê
+              </label>
+              <select
+                value={selectedDurationMonths}
+                onChange={(e) =>
+                  setSelectedDurationMonths(Number(e.target.value))
+                }
+                disabled={isProcessingPayment}
+                className="w-full rounded-lg border border-gray-300 p-2.5 text-xs bg-white focus:border-emerald-600 focus:outline-none disabled:opacity-60"
+              >
+                {RENTAL_DURATIONS.map((d) => (
+                  <option key={d.months} value={d.months}>
+                    {d.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Tổng tiền */}
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 flex items-center justify-between">
+              <span className="text-sm font-medium text-emerald-800">
+                Tổng tiền thanh toán:
+              </span>
+              <span className="text-lg font-bold text-emerald-700">
+                {formatCurrency(totalPrice)}
+              </span>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
