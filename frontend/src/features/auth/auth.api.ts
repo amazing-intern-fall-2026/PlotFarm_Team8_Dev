@@ -17,7 +17,7 @@ const STORAGE_KEYS = {
 
 // Predefined demo accounts for testing without seeded database
 export type DemoRoleKey = "farmer" | "farmer1" | "farmer2" | "farmer3" | "admin" | "customer";
-
+// DEMO ĐỂ TEST CÁC ROLE CÒN LẠI ĐỪNG XÓA
 export const DEMO_ACCOUNTS: Record<DemoRoleKey, User> = {
   farmer: {
     id: "NV0001",
