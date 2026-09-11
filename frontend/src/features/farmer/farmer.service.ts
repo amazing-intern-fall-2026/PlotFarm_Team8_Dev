@@ -43,6 +43,16 @@ function setStoredData<T>(key: string, data: T): void {
   localStorage.setItem(key, JSON.stringify(data));
 }
 
+function notifyDataChanged(eventType: string, detail?: unknown): void {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent("pf_data_changed", {
+        detail: { type: eventType, data: detail, timestamp: Date.now() },
+      }),
+    );
+  }
+}
+
 export const farmerService = {
   // Determine active farmer ID from current session
   getActiveFarmerId(): string {
@@ -106,6 +116,7 @@ export const farmerService = {
     };
 
     setStoredData(STORAGE_KEYS.PLOTS, allPlots);
+    notifyDataChanged("plot_updated", allPlots[index]);
     return allPlots[index];
   },
 
@@ -134,6 +145,7 @@ export const farmerService = {
 
     const updated = [newLog, ...allLogs];
     setStoredData(STORAGE_KEYS.LOGS, updated);
+    notifyDataChanged("log_added", newLog);
     return newLog;
   },
 
@@ -176,6 +188,7 @@ export const farmerService = {
     };
 
     setStoredData(STORAGE_KEYS.REQUESTS, allRequests);
+    notifyDataChanged("request_updated", allRequests[index]);
     return allRequests[index];
   },
 
@@ -202,6 +215,7 @@ export const farmerService = {
     };
 
     setStoredData(STORAGE_KEYS.HARVESTS, allHarvests);
+    notifyDataChanged("harvest_updated", allHarvests[index]);
     return allHarvests[index];
   },
 

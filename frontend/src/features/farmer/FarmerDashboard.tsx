@@ -64,14 +64,18 @@ export default function FarmerDashboard({ onNavigateTab }: FarmerDashboardProps)
 
   // Listen to farmer switch event for seamless testing
   useEffect(() => {
-    function handleFarmerChange() {
+    function handleSync() {
       const nextProfile = farmerService.getFarmerProfile();
       setProfile(nextProfile);
       setKpis(farmerService.getKPISummary(nextProfile.id));
       setTasks(generateTasksForFarmer(nextProfile.id));
     }
-    window.addEventListener("pf_farmer_changed", handleFarmerChange);
-    return () => window.removeEventListener("pf_farmer_changed", handleFarmerChange);
+    window.addEventListener("pf_farmer_changed", handleSync);
+    window.addEventListener("pf_data_changed", handleSync);
+    return () => {
+      window.removeEventListener("pf_farmer_changed", handleSync);
+      window.removeEventListener("pf_data_changed", handleSync);
+    };
   }, []);
 
   function handleToggleTask(id: string) {
