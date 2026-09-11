@@ -15,6 +15,20 @@ export const register = async (req, res, next) => {
   }
 };
 
+export const registerEmployee = async (req, res, next) => {
+  try {
+    // Note: In production, this should be protected by Admin role
+    const result = await authService.registerEmployee(req.body);
+    successResponse(res, {
+      message: 'Đăng ký nhân viên thành công',
+      data: result,
+      statusCode: 201,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 export const login = async (req, res, next) => {
   try {
     const result = await authService.loginUser(req.body);

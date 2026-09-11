@@ -6,6 +6,8 @@ import morgan from "morgan";
 import { PORT, CLIENT_URL } from "./config/config.js";
 import healthRoutes from "./routes/healthRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
+import farmRoutes from "./routes/farmRoutes.js";
+import contractRoutes from "./routes/contractRoutes.js";
 import notFoundHandler from "./middlewares/notFound.js";
 import errorHandler from "./middlewares/errorHandler.js";
 
@@ -21,6 +23,8 @@ app.use(express.json());
 const apiPrefix = "/api/v1";
 app.use(`${apiPrefix}`, healthRoutes);
 app.use(`${apiPrefix}/auth`, authRoutes);
+app.use(`${apiPrefix}/farms`, farmRoutes);
+app.use(`${apiPrefix}/contracts`, contractRoutes);
 
 // 404 handler
 app.use(notFoundHandler);

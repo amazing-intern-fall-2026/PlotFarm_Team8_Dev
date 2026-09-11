@@ -1,8 +1,14 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { register } from "../auth/auth.api";
+import { getRedirectPathByRole, login, register } from "../auth/auth.api";
 import type { BackendError, RegisterRequest } from "../auth/auth.types";
-import { validateRegister } from "../auth/auth.validation";
+import {
+  formatBackendErrorMessage,
+  hasErrors,
+  mapBackendValidationErrors,
+  validateRegisterForm,
+  type RegisterFormErrors,
+} from "../auth/auth.validation";
 import { Button, Input, Alert } from "../../components/ui";
 
 interface RegisterFormProps {
@@ -17,13 +23,21 @@ export default function RegisterForm({
   const navigate = useNavigate();
 
   const [form, setForm] = useState<RegisterRequest>({
-    username: "",
+    fullName: "",
     email: "",
+    phone: "",
+    shippingAddress: "",
+    username: "",
     password: "",
-    confirmpassword: "",
+    confirmPassword: "",
   });
 
-  const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<RegisterFormErrors>({});
+  const [generalError, setGeneralError] = useState<{
+    status?: number;
+    message: string;
+    details?: string[];
+  } | null>(null);
   const [successMessage, setSuccessMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -33,72 +47,90 @@ export default function RegisterForm({
       [field]: value,
     }));
 
-    if (error) {
-      setError("");
+    // Clear field error when user modifies the field
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => ({
+        ...prev,
+        [field]: undefined,
+      }));
     }
-  }
 
-  // Quick fill helper for testing registration
-  function handleFillDemo(type: "valid" | "duplicate_email" | "duplicate_user") {
-    if (type === "valid") {
-      const randomId = Math.floor(Math.random() * 1000);
-      setForm({
-        username: `nongdan_${randomId}`,
-        email: `nongdan${randomId}@plotfarm.com`,
-        password: "password123",
-        confirmpassword: "password123",
-      });
-    } else if (type === "duplicate_email") {
-      setForm({
-        username: "user_test",
-        email: "customer@plotfarm.com", // Existing email
-        password: "password123",
-        confirmpassword: "password123",
-      });
-    } else {
-      setForm({
-        username: "admin", // Existing username
-        email: "admin_unique@plotfarm.com",
-        password: "password123",
-        confirmpassword: "password123",
-      });
+    if (generalError) {
+      setGeneralError(null);
     }
-    setError("");
-    setSuccessMessage("");
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    // Client-side validation
-    const validationError = validateRegister(form);
-    if (validationError) {
-      setError(validationError);
+    // Frontend validation
+    const clientValidationErrors = validateRegisterForm(form);
+    if (hasErrors(clientValidationErrors)) {
+      setFieldErrors(clientValidationErrors);
       return;
     }
 
     try {
       setLoading(true);
-      setError("");
+      setFieldErrors({});
+      setGeneralError(null);
       setSuccessMessage("");
 
-      // Call register API
-      await register(form);
+      // 1. Call real backend register API
+      const registerRes = await register(form);
 
-      setSuccessMessage("Đăng ký thành công! Đang chuyển hướng vào trang chính...");
+      setSuccessMessage(
+        registerRes.message || "Đăng ký tài khoản thành công! Đang tự động đăng nhập...",
+      );
 
-      setTimeout(() => {
-        navigate(onSuccessRedirect);
-      }, 1000);
+      // 2. Automatically log in with new credentials
+      try {
+        const loginRes = await login({
+          username: form.username.trim(),
+          password: form.password,
+        });
+
+        const targetPath =
+          onSuccessRedirect || getRedirectPathByRole(loginRes.user?.role);
+
+        setTimeout(() => {
+          navigate(targetPath, { replace: true });
+        }, 1200);
+      } catch {
+        // In case automatic login fails, prompt user to switch to Login tab
+        setSuccessMessage("Đăng ký thành công! Vui lòng đăng nhập với tài khoản vừa tạo.");
+        setTimeout(() => {
+          if (onSwitchToLogin) {
+            onSwitchToLogin();
+          } else {
+            navigate("/login");
+          }
+        }, 1500);
+      }
     } catch (err: unknown) {
       const backendErr = err as BackendError;
-      if (backendErr?.message) {
-        setError(backendErr.message);
-      } else if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError("Đăng ký thất bại. Vui lòng kiểm tra lại kết nối backend.");
+      const status = backendErr?.status;
+      const formattedMessage = backendErr
+        ? formatBackendErrorMessage(backendErr)
+        : "Đăng ký thất bại. Vui lòng kiểm tra lại kết nối backend.";
+
+      // Map backend field-level validation errors (if any)
+      const mappedFieldErrors = mapBackendValidationErrors(backendErr?.errors);
+      if (Object.keys(mappedFieldErrors).length > 0) {
+        setFieldErrors(mappedFieldErrors);
       }
+
+      // Collect validation detail bullet points if present
+      let details: string[] | undefined;
+      if (Array.isArray(backendErr?.errors)) {
+        details = backendErr.errors.map((e) => `${e.path ? `${e.path}: ` : ""}${e.msg}`);
+      }
+
+      setGeneralError({
+        status,
+        message: formattedMessage,
+        details,
+      });
     } finally {
       setLoading(false);
     }
@@ -106,32 +138,81 @@ export default function RegisterForm({
 
   return (
     <div className="space-y-6">
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Backend / Validation Error Alert */}
-        {error && (
+      <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+        {/* Backend & Validation Error Alert */}
+        {generalError && (
           <Alert
             variant="error"
-            title="Lỗi đăng ký:"
-            onClose={() => setError("")}
+            title={
+              generalError.status ? (
+                <span className="flex items-center gap-2">
+                  <span className="rounded bg-red-200/70 px-1.5 py-0.5 text-2xs font-mono font-bold text-red-900">
+                    HTTP {generalError.status}
+                  </span>
+                  <span>Thông báo từ hệ thống:</span>
+                </span>
+              ) : (
+                "Lỗi đăng ký:"
+              )
+            }
+            onClose={() => setGeneralError(null)}
           >
-            {error}
+            <div className="space-y-1">
+              <p>{generalError.message}</p>
+              {generalError.details && generalError.details.length > 0 && (
+                <ul className="mt-1 list-disc list-inside text-xs text-red-800 space-y-0.5">
+                  {generalError.details.map((detail, index) => (
+                    <li key={index}>{detail}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </Alert>
         )}
 
         {/* Success Alert */}
         {successMessage && (
-          <Alert variant="success">
+          <Alert variant="success" title="Đăng ký thành công">
             {successMessage}
           </Alert>
         )}
 
+        {/* Họ và tên */}
+        <Input
+          label="Họ và tên"
+          type="text"
+          placeholder="Ví dụ: Nguyễn Văn Nông"
+          value={form.fullName}
+          disabled={loading}
+          autoComplete="name"
+          error={fieldErrors.fullName}
+          leftIcon={
+            <svg
+              className="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+          }
+          onChange={(event) => handleChange("fullName", event.target.value)}
+        />
+
+        {/* Tên đăng nhập */}
         <Input
           label="Tên tài khoản (Username)"
           type="text"
-          placeholder="Ví dụ: nongdanviet"
+          placeholder="Tối thiểu 3 ký tự, không chứa khoảng trắng"
           value={form.username}
           disabled={loading}
           autoComplete="username"
+          error={fieldErrors.username}
           leftIcon={
             <svg
               className="h-4 w-4"
@@ -150,13 +231,15 @@ export default function RegisterForm({
           onChange={(event) => handleChange("username", event.target.value)}
         />
 
+        {/* Email */}
         <Input
           label="Địa chỉ Email"
           type="email"
-          placeholder="customer@plotfarm.com"
+          placeholder="example@plotfarm.com"
           value={form.email}
           disabled={loading}
           autoComplete="email"
+          error={fieldErrors.email}
           leftIcon={
             <svg
               className="h-4 w-4"
@@ -175,13 +258,75 @@ export default function RegisterForm({
           onChange={(event) => handleChange("email", event.target.value)}
         />
 
+        {/* Số điện thoại */}
+        <Input
+          label="Số điện thoại"
+          type="tel"
+          placeholder="Số điện thoại từ 9-11 chữ số"
+          value={form.phone}
+          disabled={loading}
+          autoComplete="tel"
+          error={fieldErrors.phone}
+          leftIcon={
+            <svg
+              className="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
+              />
+            </svg>
+          }
+          onChange={(event) => handleChange("phone", event.target.value)}
+        />
+
+        {/* Địa chỉ giao hàng / liên hệ */}
+        <Input
+          label="Địa chỉ liên hệ / giao hàng"
+          type="text"
+          placeholder="Số nhà, tên đường, phường/xã, quận/huyện, tỉnh/TP"
+          value={form.shippingAddress}
+          disabled={loading}
+          autoComplete="street-address"
+          error={fieldErrors.shippingAddress}
+          leftIcon={
+            <svg
+              className="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+              />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+              />
+            </svg>
+          }
+          onChange={(event) => handleChange("shippingAddress", event.target.value)}
+        />
+
+        {/* Mật khẩu */}
         <Input
           label="Mật khẩu"
           type="password"
-          placeholder="Tối thiểu 6 ký tự"
+          placeholder="Tối thiểu 8 ký tự theo quy định hệ thống"
           value={form.password}
           disabled={loading}
           autoComplete="new-password"
+          error={fieldErrors.password}
           leftIcon={
             <svg
               className="h-4 w-4"
@@ -200,13 +345,15 @@ export default function RegisterForm({
           onChange={(event) => handleChange("password", event.target.value)}
         />
 
+        {/* Xác nhận mật khẩu */}
         <Input
           label="Xác nhận mật khẩu"
           type="password"
-          placeholder="Nhập lại mật khẩu"
-          value={form.confirmpassword}
+          placeholder="Nhập lại mật khẩu để kiểm tra"
+          value={form.confirmPassword}
           disabled={loading}
           autoComplete="new-password"
+          error={fieldErrors.confirmPassword}
           leftIcon={
             <svg
               className="h-4 w-4"
@@ -223,13 +370,13 @@ export default function RegisterForm({
             </svg>
           }
           onChange={(event) =>
-            handleChange("confirmpassword", event.target.value)
+            handleChange("confirmPassword", event.target.value)
           }
         />
 
-        <div className="pt-1">
+        <div className="pt-2">
           <Button type="submit" loading={loading} variant="primary">
-            Tạo tài khoản Customer
+            Tạo tài khoản Khách hàng
           </Button>
         </div>
       </form>
@@ -247,39 +394,6 @@ export default function RegisterForm({
           </button>
         </div>
       )}
-
-      {/* Demo testing helper tools */}
-      <div className="rounded-lg border border-emerald-100 bg-emerald-50/50 p-3 text-xs text-gray-600">
-        <div className="mb-2 font-medium text-emerald-800 flex items-center gap-1.5">
-          <svg className="h-3.5 w-3.5 text-emerald-600" fill="currentColor" viewBox="0 0 20 20">
-            <path d="M11 3a1 1 0 10-2 0v1a1 1 0 01-1 1H7a1 1 0 000 2h1a1 1 0 011 1v1a1 1 0 102 0v-1a1 1 0 011-1h1a1 1 0 100-2h-1a1 1 0 01-1-1V3z" />
-          </svg>
-          Mẹo kiểm thử đăng ký (Demo):
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => handleFillDemo("valid")}
-            className="rounded bg-white px-2.5 py-1 text-xs font-medium text-emerald-700 shadow-xs border border-emerald-200 hover:bg-emerald-100 transition"
-          >
-            Điền tài khoản mới
-          </button>
-          <button
-            type="button"
-            onClick={() => handleFillDemo("duplicate_email")}
-            className="rounded bg-white px-2.5 py-1 text-xs font-medium text-amber-700 shadow-xs border border-amber-200 hover:bg-amber-100 transition"
-          >
-            Test trùng Email (400)
-          </button>
-          <button
-            type="button"
-            onClick={() => handleFillDemo("duplicate_user")}
-            className="rounded bg-white px-2.5 py-1 text-xs font-medium text-red-700 shadow-xs border border-red-200 hover:bg-red-100 transition"
-          >
-            Test trùng Username (400)
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
