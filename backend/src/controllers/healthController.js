@@ -1,5 +1,6 @@
 import { successResponse } from '../utils/response.js';
 import { getPool } from '../config/database.js';
+import { AppError } from '../utils/AppError.js';
 
 export const health = async (req, res, next) => {
   try {
@@ -9,7 +10,7 @@ export const health = async (req, res, next) => {
     successResponse(res, { message: 'OK', data });
   } catch (err) {
     // Forward to global error handler without leaking sensitive info
-    next(err);
+    next(new AppError('Database connection failed', 503));
   }
 };
 
