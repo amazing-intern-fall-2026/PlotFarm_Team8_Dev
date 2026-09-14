@@ -69,7 +69,13 @@ export const customerService = {
     const username = (user?.username || "").toLowerCase();
     if (username.includes("customer3") || username.includes("tuan")) return "KH0003";
     if (username.includes("customer2") || username.includes("mai")) return "KH0002";
-    return "KH0001"; // Nguyễn Văn Nông
+    if (username === "customer" || username.includes("nong")) return "KH0001";
+    
+    // Nếu là tài khoản khách hàng mới đăng ký thực sự (có ID hoặc username riêng)
+    if (user?.username) {
+      return `USER_${user.username}`;
+    }
+    return "KH0001"; // Fallback mặc định
   },
 
   getAllCustomerProfiles(): Record<string, SharedCustomerProfile> {
@@ -82,7 +88,26 @@ export const customerService = {
   getActiveCustomerProfile(customerId?: string): SharedCustomerProfile {
     const id = customerId || this.getActiveCustomerId();
     const profiles = this.getAllCustomerProfiles();
-    return profiles[id] || DEMO_CUSTOMERS.KH0001;
+    if (profiles[id]) {
+      return profiles[id];
+    }
+
+    // Nếu là tài khoản vừa đăng ký mới (không nằm trong 3 demo customer có sẵn đất)
+    const user = getCurrentUser();
+    if (user && user.username) {
+      return {
+        id: id,
+        username: user.username,
+        name: user.fullName || user.username,
+        email: user.email || `${user.username}@gmail.com`,
+        phone: "",
+        shippingAddress: "",
+        ownedPlotCodes: [], // Tài khoản mới chưa có thửa đất nào
+        avatarIcon: "👤",
+      };
+    }
+
+    return DEMO_CUSTOMERS.KH0001;
   },
 
   getAvailableDemoCustomers(): SharedCustomerProfile[] {
@@ -125,10 +150,14 @@ export const customerService = {
     const profile = this.getActiveCustomerProfile(activeCustId);
     const allPlots = this.getAllPlots();
 
+    // Nếu tài khoản mới (ownedPlotCodes rỗng và không trùng customerId trong mock)
+    if (!profile.ownedPlotCodes || profile.ownedPlotCodes.length === 0) {
+      return allPlots.filter((plot) => plot.customerId === activeCustId);
+    }
+
     return allPlots.filter(
       (plot) =>
         plot.customerId === activeCustId ||
-        plot.customerName.toLowerCase().includes(profile.name.toLowerCase()) ||
         profile.ownedPlotCodes.includes(plot.plotCode),
     );
   },

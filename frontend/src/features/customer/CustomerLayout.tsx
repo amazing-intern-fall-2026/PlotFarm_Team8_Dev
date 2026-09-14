@@ -147,52 +147,54 @@ export default function CustomerLayout() {
 
           {/* Quick Switchers: Demo Customer + Jump to Farmer Portal */}
           <div className="flex flex-wrap items-center gap-2 text-xs">
-            {/* Customer Switcher */}
-            <div className="flex items-center gap-1 bg-emerald-50/90 border border-emerald-200 px-2 py-1 rounded-lg">
-              <span className="text-2xs font-bold uppercase text-emerald-900 mr-1 flex items-center gap-1">
-                <span>🧪</span>
-                <span className="hidden md:inline">Test Khách:</span>
-              </span>
-              <button
-                type="button"
-                onClick={() => handleQuickSwitchCustomer("KH0001")}
-                className={`flex items-center gap-1 px-2 py-0.5 rounded text-2xs font-semibold cursor-pointer transition ${
-                  activeCustomer.id === "KH0001"
-                    ? "bg-emerald-700 text-white shadow-xs"
-                    : "text-gray-700 hover:bg-emerald-100"
-                }`}
-                title="Nguyễn Văn Nông (Thửa PL-0192 Lúa ST25)"
-              >
-                <span>👨‍💼 Nông</span>
-                <span className={`font-mono font-bold px-1 rounded ${activeCustomer.id === "KH0001" ? "bg-emerald-600 text-emerald-100" : "bg-gray-100 text-gray-600"}`}>0192</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickSwitchCustomer("KH0002")}
-                className={`flex items-center gap-1 px-2 py-0.5 rounded text-2xs font-semibold cursor-pointer transition ${
-                  activeCustomer.id === "KH0002"
-                    ? "bg-emerald-700 text-white shadow-xs"
-                    : "text-gray-700 hover:bg-emerald-100"
-                }`}
-                title="Trần Thị Mai (Thửa PL-0205 Cà chua bi)"
-              >
-                <span>👩‍💼 Mai</span>
-                <span className={`font-mono font-bold px-1 rounded ${activeCustomer.id === "KH0002" ? "bg-emerald-600 text-emerald-100" : "bg-gray-100 text-gray-600"}`}>0205</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickSwitchCustomer("KH0003")}
-                className={`flex items-center gap-1 px-2 py-0.5 rounded text-2xs font-semibold cursor-pointer transition ${
-                  activeCustomer.id === "KH0003"
-                    ? "bg-emerald-700 text-white shadow-xs"
-                    : "text-gray-700 hover:bg-emerald-100"
-                }`}
-                title="Hoàng Minh Tuấn (Thửa PL-0311 Dưa lưới)"
-              >
-                <span>🧑‍💻 Tuấn</span>
-                <span className={`font-mono font-bold px-1 rounded ${activeCustomer.id === "KH0003" ? "bg-emerald-600 text-emerald-100" : "bg-gray-100 text-gray-600"}`}>0311</span>
-              </button>
-            </div>
+            {/* Customer Switcher - chỉ hiện khi đang test tài khoản demo */}
+            {(!user?.username || ["customer", "customer1", "customer2", "customer3"].includes(user.username.toLowerCase())) && (
+              <div className="flex items-center gap-1 bg-emerald-50/90 border border-emerald-200 px-2 py-1 rounded-lg">
+                <span className="text-2xs font-bold uppercase text-emerald-900 mr-1 flex items-center gap-1">
+                  <span>🧪</span>
+                  <span className="hidden md:inline">Test Khách:</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleQuickSwitchCustomer("KH0001")}
+                  className={`flex items-center gap-1 px-2 py-0.5 rounded text-2xs font-semibold cursor-pointer transition ${
+                    activeCustomer.id === "KH0001"
+                      ? "bg-emerald-700 text-white shadow-xs"
+                      : "text-gray-700 hover:bg-emerald-100"
+                  }`}
+                  title="Nguyễn Văn Nông (Thửa PL-0192 Lúa ST25)"
+                >
+                  <span>👨‍💼 Nông</span>
+                  <span className={`font-mono font-bold px-1 rounded ${activeCustomer.id === "KH0001" ? "bg-emerald-600 text-emerald-100" : "bg-gray-100 text-gray-600"}`}>0192</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleQuickSwitchCustomer("KH0002")}
+                  className={`flex items-center gap-1 px-2 py-0.5 rounded text-2xs font-semibold cursor-pointer transition ${
+                    activeCustomer.id === "KH0002"
+                      ? "bg-emerald-700 text-white shadow-xs"
+                      : "text-gray-700 hover:bg-emerald-100"
+                  }`}
+                  title="Trần Thị Mai (Thửa PL-0205 Cà chua bi)"
+                >
+                  <span>👩‍💼 Mai</span>
+                  <span className={`font-mono font-bold px-1 rounded ${activeCustomer.id === "KH0002" ? "bg-emerald-600 text-emerald-100" : "bg-gray-100 text-gray-600"}`}>0205</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleQuickSwitchCustomer("KH0003")}
+                  className={`flex items-center gap-1 px-2 py-0.5 rounded text-2xs font-semibold cursor-pointer transition ${
+                    activeCustomer.id === "KH0003"
+                      ? "bg-emerald-700 text-white shadow-xs"
+                      : "text-gray-700 hover:bg-emerald-100"
+                  }`}
+                  title="Hoàng Minh Tuấn (Thửa PL-0311 Dưa lưới)"
+                >
+                  <span>🧑‍💻 Tuấn</span>
+                  <span className={`font-mono font-bold px-1 rounded ${activeCustomer.id === "KH0003" ? "bg-emerald-600 text-emerald-100" : "bg-gray-100 text-gray-600"}`}>0311</span>
+                </button>
+              </div>
+            )}
 
             {/* Quick jump to Farmer Portal button for effortless testing */}
             <button
