@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
 import { customerService } from "./customer.service";
-import type {
-  CustomerKPISummary,
-  CustomerTab,
-  SharedCareRequestItem,
-  SharedFarmingLogItem,
-  SharedPlotItem,
+import {
+  cleanCode,
+  type CustomerKPISummary,
+  type CustomerTab,
+  type SharedCareRequestItem,
+  type SharedFarmingLogItem,
+  type SharedPlotItem,
 } from "./customer.types";
 import { Badge, Button, Card, StatCard } from "../../components/ui";
 
@@ -233,10 +234,10 @@ export default function CustomerDashboard({
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="font-mono text-sm font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                        {plot.plotCode}
+                        {cleanCode(plot.plotCode)}
                       </span>
                       <span className="text-xs text-gray-500">
-                        HĐ: {plot.contractId}
+                        HĐ: {cleanCode(plot.contractId)}
                       </span>
                     </div>
                     <h3 className="text-base font-bold text-gray-900 mt-1">
@@ -348,10 +349,13 @@ export default function CustomerDashboard({
               logs.slice(0, 3).map((log) => (
                 <div key={log.id} className="py-3 first:pt-0 last:pb-0 space-y-1.5">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-emerald-800">
-                      {log.plot} • {log.activity}
-                    </span>
-                    <span className="text-gray-400 text-2xs">{log.date}</span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="font-mono text-xs font-bold text-emerald-900 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                        {cleanCode(log.plot)}
+                      </span>
+                      <span className="font-semibold text-gray-800">• {log.activity}</span>
+                    </div>
+                    <span className="text-gray-400 text-2xs shrink-0">{log.date}</span>
                   </div>
                   <p className="text-xs text-gray-700 line-clamp-2 leading-relaxed">
                     {log.description}
@@ -407,9 +411,13 @@ export default function CustomerDashboard({
               requests.slice(0, 3).map((req) => (
                 <div key={req.id} className="py-3 first:pt-0 last:pb-0 space-y-1.5">
                   <div className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-gray-900">#{req.id}</span>
-                      <span className="text-gray-500 font-mono">({req.plot})</span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="font-mono text-xs font-bold text-gray-700 bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">
+                        {cleanCode(req.id)}
+                      </span>
+                      <span className="font-mono text-xs font-bold text-emerald-900 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                        {cleanCode(req.plot)}
+                      </span>
                       <span className="text-purple-800 font-medium">
                         {req.requestType}
                       </span>

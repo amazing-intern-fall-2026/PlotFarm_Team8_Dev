@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { customerService } from "./customer.service";
-import type {
-  SharedFarmingLogItem,
-  SharedPlotItem,
+import {
+  cleanCode,
+  type SharedFarmingLogItem,
+  type SharedPlotItem,
 } from "./customer.types";
 import { Card, Modal, Button } from "../../components/ui";
 
@@ -68,7 +69,7 @@ export default function CustomerLogs() {
               <option value="ALL">Tất cả thửa đất ({plots.length})</option>
               {plots.map((p) => (
                 <option key={p.id} value={p.plotCode}>
-                  {p.plotCode} - {p.plantCrop}
+                  {cleanCode(p.plotCode)} - {p.plantCrop}
                 </option>
               ))}
             </select>
@@ -110,7 +111,7 @@ export default function CustomerLogs() {
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-3">
                 <div className="flex items-center gap-2.5">
                   <span className="font-mono text-xs font-bold text-emerald-900 bg-emerald-100 px-2 py-0.5 rounded">
-                    {log.plot}
+                    {cleanCode(log.plot)}
                   </span>
                   <span className="font-bold text-sm text-gray-900">
                     {log.activity}
