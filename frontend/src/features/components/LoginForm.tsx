@@ -14,11 +14,13 @@ import { Button, Input, Alert } from "../../components/ui";
 
 interface LoginFormProps {
   onSwitchToRegister?: () => void;
+  onSwitchToForgotPassword?: () => void;
   onSuccessRedirect?: string;
 }
 
 export default function LoginForm({
   onSwitchToRegister,
+  onSwitchToForgotPassword,
   onSuccessRedirect,
 }: LoginFormProps) {
   const navigate = useNavigate();
@@ -36,6 +38,7 @@ export default function LoginForm({
     details?: string[];
   } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
 
   function handleChange(field: keyof LoginRequest, value: string) {
     setForm((prev) => ({
@@ -60,10 +63,10 @@ export default function LoginForm({
   function handleQuickDemoLogin(role: "farmer" | "farmer1" | "farmer2" | "farmer3" | "admin" | "customer") {
     try {
       setLoading(true);
-      const auth = loginWithDemoRole(role);
+      const auth = loginWithDemoRole(role, rememberMe);
       setAuthContext(auth.accessToken, auth.user);
       const targetPath = onSuccessRedirect || getRedirectPathByRole(auth.user?.role);
-      navigate(targetPath, { replace: true });
+      navigate(targetPath);
     } finally {
       setLoading(false);
     }
@@ -94,14 +97,14 @@ export default function LoginForm({
       setFieldErrors({});
       setGeneralError(null);
 
-      // Call real backend API (falls back to mock if backend 401/offline and demo username is used)
-      const response = await login(form);
+      // Call real backend API (falls back to mock nếu KHÔNG KẾT NỐI ĐƯỢC backend)
+      const response = await login(form, rememberMe);
       setAuthContext(response.accessToken, response.user);
 
       // Redirect based on user role returned from backend
       const targetPath =
         onSuccessRedirect || getRedirectPathByRole(response.user?.role);
-      navigate(targetPath, { replace: true });
+      navigate(targetPath);
     } catch (err: unknown) {
       const backendErr = err as BackendError;
       const status = backendErr?.status;
@@ -218,24 +221,33 @@ export default function LoginForm({
         />
 
         <div className="flex items-center justify-between text-xs">
-          <label className="flex items-center gap-2 text-gray-600 cursor-pointer">
+          <label className="flex items-center gap-2 text-gray-600 cursor-pointer select-none">
             <input
               type="checkbox"
-              className="h-3.5 w-3.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
-              defaultChecked
+              className="h-3.5 w-3.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
             />
-            <span>Ghi nhớ đăng nhập</span>
+            <span>
+              Ghi nhớ đăng nhập
+              <span className="ml-1 text-gray-400">
+                {rememberMe ? "(lưu sau khi tắt trình duyệt)" : "(mất khi đóng tab)"}
+              </span>
+            </span>
           </label>
-          <a
-            href="#forgot-password"
-            onClick={(e) => {
-              e.preventDefault();
-              alert("Tính năng quên mật khẩu đang kết nối với hệ thống xác thực. Vui lòng liên hệ Quản trị viên.");
+          <button
+            type="button"
+            onClick={() => {
+              if (onSwitchToForgotPassword) {
+                onSwitchToForgotPassword();
+              } else {
+                navigate("/forgot-password");
+              }
             }}
-            className="font-medium text-emerald-600 hover:text-emerald-700 hover:underline"
+            className="font-medium text-emerald-600 hover:text-emerald-700 hover:underline cursor-pointer"
           >
             Quên mật khẩu?
-          </a>
+          </button>
         </div>
 
         <Button type="submit" loading={loading} variant="primary">

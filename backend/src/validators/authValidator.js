@@ -90,3 +90,30 @@ export const validateLogin = [
   handleValidation,
 ];
 
+export const validateForgotPassword = [
+  body('identifier')
+    .trim()
+    .notEmpty()
+    .withMessage('Vui lòng nhập tên đăng nhập hoặc email'),
+  handleValidation,
+];
+
+export const validateResetPassword = [
+  body('identifier')
+    .trim()
+    .notEmpty()
+    .withMessage('Tên đăng nhập hoặc email là bắt buộc'),
+  body('otp')
+    .trim()
+    .notEmpty()
+    .withMessage('Mã OTP là bắt buộc')
+    .matches(/^\d{6}$/)
+    .withMessage('Mã OTP phải bao gồm đúng 6 chữ số'),
+  body('newPassword')
+    .notEmpty()
+    .withMessage('Mật khẩu mới là bắt buộc')
+    .isLength({ min: 8 })
+    .withMessage('Mật khẩu mới phải có ít nhất 8 ký tự'),
+  handleValidation,
+];
+

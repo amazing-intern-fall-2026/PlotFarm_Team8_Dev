@@ -1,0 +1,23 @@
+-- 005_create_password_resets.sql
+-- Idempotent table and index creation for password reset feature
+-- PlotFarm Team 8
+
+IF OBJECT_ID(N'dbo.DATLAIMATKHAU', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.DATLAIMATKHAU (
+        Id BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        TenDangNhap VARCHAR(50) NOT NULL,
+        Email VARCHAR(254) NOT NULL,
+        OtpHash VARCHAR(255) NOT NULL,
+        ExpiresAt DATETIME2 NOT NULL,
+        IsUsed BIT NOT NULL DEFAULT 0,
+        CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+        CONSTRAINT FK_DATLAIMATKHAU_TAIKHOAN FOREIGN KEY (TenDangNhap) REFERENCES dbo.TAIKHOAN(TenDangNhap) ON DELETE CASCADE
+    );
+END;
+
+-- Create indexes for quick lookup
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_DATLAIMATKHAU_TENDANGNHAP_ISUSED' AND object_id = OBJECT_ID(N'dbo.DATLAIMATKHAU'))
+BEGIN
+    CREATE INDEX IX_DATLAIMATKHAU_TENDANGNHAP_ISUSED ON dbo.DATLAIMATKHAU (TenDangNhap, IsUsed, ExpiresAt);
+END;

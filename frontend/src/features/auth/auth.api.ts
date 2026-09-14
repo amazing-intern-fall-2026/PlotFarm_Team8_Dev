@@ -2,9 +2,12 @@ import type {
   ApiResponse,
   AuthResponse,
   BackendError,
+  ForgotPasswordRequest,
+  ForgotPasswordResponseData,
   LoginRequest,
   RegisterRequest,
   RegisterResponseData,
+  ResetPasswordRequest,
   User,
 } from "./auth.types";
 
@@ -13,6 +16,7 @@ const API_URL = (import.meta.env.VITE_API_URL || "/api/v1").replace(/\/$/, "");
 const STORAGE_KEYS = {
   TOKEN: "accessToken",
   USER: "authUser",
+  REMEMBER: "rememberMe",
 };
 
 // Predefined demo accounts for testing without seeded database
@@ -75,16 +79,68 @@ export const DEMO_ACCOUNTS: Record<DemoRoleKey, User> = {
   },
 };
 
+// ─────────────────────────────────────────────────────────────
+// Storage helpers: sessionStorage (không nhớ) vs localStorage (nhớ)
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Trả về storage đang lưu token.
+ * Ưu tiên sessionStorage trước (phiên hiện tại không ghi nhớ),
+ * rồi mới kiểm tra localStorage (phiên ghi nhớ lâu dài).
+ */
+function getActiveStorage(): Storage {
+  if (typeof window === "undefined") return localStorage;
+  if (sessionStorage.getItem(STORAGE_KEYS.TOKEN)) return sessionStorage;
+  return localStorage;
+}
+
+/**
+ * Chọn storage dựa trên lựa chọn "Ghi nhớ đăng nhập":
+ * - true  → localStorage  (còn sau khi đóng trình duyệt)
+ * - false → sessionStorage (mất khi đóng tab/trình duyệt)
+ */
+function pickStorage(rememberMe: boolean): Storage {
+  return rememberMe ? localStorage : sessionStorage;
+}
+
+// ─────────────────────────────────────────────────────────────
+// JWT expiry helpers
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Giải mã phần payload của JWT và kiểm tra trường `exp`.
+ * Trả về true nếu token đã hết hạn.
+ */
+function isTokenExpired(token: string): boolean {
+  try {
+    // JWT = header.payload.signature — chỉ cần phần payload (index 1)
+    const base64Payload = token.split(".")[1];
+    if (!base64Payload) return true;
+    // Thêm padding để atob() không lỗi
+    const padded = base64Payload.replace(/-/g, "+").replace(/_/g, "/");
+    const json = atob(padded);
+    const payload = JSON.parse(json) as { exp?: number };
+    if (!payload.exp) return false; // Không có exp → coi như không hết hạn
+    return payload.exp * 1000 < Date.now();
+  } catch {
+    return true; // Không decode được → coi như hết hạn để an toàn
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Demo account matching
+// ─────────────────────────────────────────────────────────────
+
 /**
  * 1-Click login with predefined demo role or specific farmer
  */
-export function loginWithDemoRole(role: DemoRoleKey): AuthResponse {
+export function loginWithDemoRole(role: DemoRoleKey, rememberMe = true): AuthResponse {
   const demoUser = DEMO_ACCOUNTS[role] || DEMO_ACCOUNTS.farmer;
   const authResponse: AuthResponse = {
     accessToken: `mock-jwt-token-${demoUser.role.toLowerCase()}-${Date.now()}`,
     user: demoUser,
   };
-  saveAuthSession(authResponse);
+  saveAuthSession(authResponse, rememberMe);
   return authResponse;
 }
 
@@ -111,6 +167,10 @@ function findMatchingDemoAccount(usernameOrEmail: string): User | null {
   return null;
 }
 
+// ─────────────────────────────────────────────────────────────
+// Network helpers
+// ─────────────────────────────────────────────────────────────
+
 /**
  * Extract structured BackendError from fetch Response or catch block
  */
@@ -132,10 +192,16 @@ async function parseErrorResponse(response: Response): Promise<BackendError> {
   }
 }
 
+// ─────────────────────────────────────────────────────────────
+// Auth API functions
+// ─────────────────────────────────────────────────────────────
+
 /**
- * Handle Login request directly with Backend API, with seamless Demo Fallback
+ * Handle Login request directly with Backend API.
+ * Demo fallback CHỈ kích hoạt khi KHÔNG THỂ KẾT NỐI backend (networkFailed).
+ * Nếu backend trả 401 (sai mật khẩu), hiện lỗi thật — KHÔNG fallback mock.
  */
-export async function login(credentials: LoginRequest): Promise<AuthResponse> {
+export async function login(credentials: LoginRequest, rememberMe = true): Promise<AuthResponse> {
   const trimmedUsername = credentials.username.trim();
   const matchedDemo = findMatchingDemoAccount(trimmedUsername);
 
@@ -157,13 +223,13 @@ export async function login(credentials: LoginRequest): Promise<AuthResponse> {
     networkFailed = true;
   }
 
-  // If network failed or backend 401 and this is a demo account, use demo mock session!
-  if ((networkFailed || (response && response.status === 401)) && matchedDemo) {
+  // Fallback demo CHỈ khi không kết nối được backend (KHÔNG phải khi sai mật khẩu)
+  if (networkFailed && matchedDemo) {
     const mockAuth: AuthResponse = {
       accessToken: `mock-jwt-token-${matchedDemo.role.toLowerCase()}-${Date.now()}`,
       user: matchedDemo,
     };
-    saveAuthSession(mockAuth);
+    saveAuthSession(mockAuth, rememberMe);
     return mockAuth;
   }
 
@@ -183,8 +249,8 @@ export async function login(credentials: LoginRequest): Promise<AuthResponse> {
   const result = (await response.json()) as ApiResponse<AuthResponse>;
   const authData = result.data;
 
-  // Save token and user details to localStorage
-  saveAuthSession(authData);
+  // Lưu token theo lựa chọn "Ghi nhớ đăng nhập"
+  saveAuthSession(authData, rememberMe);
   return authData;
 }
 
@@ -230,6 +296,81 @@ export async function register(
 }
 
 /**
+ * Request password reset (Forgot Password)
+ */
+export async function forgotPassword(
+  payload: ForgotPasswordRequest,
+): Promise<ApiResponse<ForgotPasswordResponseData>> {
+  const trimmed = payload.identifier.trim();
+
+  let response: Response | null = null;
+  let networkFailed = false;
+
+  try {
+    response = await fetch(`${API_URL}/auth/forgot-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ identifier: trimmed }),
+    });
+  } catch {
+    networkFailed = true;
+  }
+
+  if (networkFailed) {
+    throw {
+      status: 0,
+      message: "Không thể kết nối đến máy chủ Backend. Vui lòng kiểm tra lại dịch vụ Backend đang chạy tại cổng 3000.",
+      errors: null,
+    } as BackendError;
+  }
+
+  if (!response || !response.ok) {
+    const errorData = response ? await parseErrorResponse(response) : { message: "Lỗi kết nối", status: 500 };
+    throw errorData;
+  }
+
+  return (await response.json()) as ApiResponse<ForgotPasswordResponseData>;
+}
+
+/**
+ * Reset password using OTP code
+ */
+export async function resetPassword(
+  payload: ResetPasswordRequest,
+): Promise<ApiResponse<{ username: string }>> {
+  const trimmedIdentifier = payload.identifier.trim();
+  const trimmedOtp = payload.otp.trim();
+
+  let response: Response | null = null;
+  let networkFailed = false;
+
+  try {
+    response = await fetch(`${API_URL}/auth/reset-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ identifier: trimmedIdentifier, otp: trimmedOtp, newPassword: payload.newPassword }),
+    });
+  } catch {
+    networkFailed = true;
+  }
+
+  if (networkFailed) {
+    throw {
+      status: 0,
+      message: "Không thể kết nối đến máy chủ Backend. Vui lòng kiểm tra lại dịch vụ Backend đang chạy tại cổng 3000.",
+      errors: null,
+    } as BackendError;
+  }
+
+  if (!response || !response.ok) {
+    const errorData = response ? await parseErrorResponse(response) : { message: "Lỗi kết nối", status: 500 };
+    throw errorData;
+  }
+
+  return (await response.json()) as ApiResponse<{ username: string }>;
+}
+
+/**
  * Fetch current user profile with JWT from Backend
  */
 export async function fetchCurrentUser(): Promise<User> {
@@ -258,55 +399,84 @@ export async function fetchCurrentUser(): Promise<User> {
   const res = await response.json();
   const user = res.data?.user as User;
   if (user) {
-    localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(user));
+    getActiveStorage().setItem(STORAGE_KEYS.USER, JSON.stringify(user));
   }
   return user;
 }
 
+// ─────────────────────────────────────────────────────────────
+// Session management
+// ─────────────────────────────────────────────────────────────
+
 /**
- * Save auth session to localStorage
+ * Lưu auth session vào storage phù hợp.
+ * rememberMe=true → localStorage (nhớ sau khi tắt trình duyệt)
+ * rememberMe=false → sessionStorage (mất khi đóng tab)
  */
-export function saveAuthSession(data: AuthResponse): void {
+export function saveAuthSession(data: AuthResponse, rememberMe = true): void {
+  const storage = pickStorage(rememberMe);
   if (data.accessToken) {
-    localStorage.setItem(STORAGE_KEYS.TOKEN, data.accessToken);
+    storage.setItem(STORAGE_KEYS.TOKEN, data.accessToken);
   }
   if (data.user) {
-    localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(data.user));
+    storage.setItem(STORAGE_KEYS.USER, JSON.stringify(data.user));
   }
+  // Lưu lại lựa chọn để các hàm getter biết tìm ở đâu
+  storage.setItem(STORAGE_KEYS.REMEMBER, rememberMe ? "1" : "0");
 }
 
 /**
- * Get current user from localStorage
+ * Get current user from active storage
  */
 export function getCurrentUser(): User | null {
   try {
-    const stored = localStorage.getItem(STORAGE_KEYS.USER);
-    return stored ? JSON.parse(stored) : null;
+    const stored = getActiveStorage().getItem(STORAGE_KEYS.USER);
+    return stored ? (JSON.parse(stored) as User) : null;
   } catch {
     return null;
   }
 }
 
 /**
- * Get current access token from localStorage
+ * Get current access token from active storage
  */
 export function getAccessToken(): string | null {
-  return localStorage.getItem(STORAGE_KEYS.TOKEN);
+  return getActiveStorage().getItem(STORAGE_KEYS.TOKEN);
 }
 
 /**
- * Check if user is currently authenticated
+ * Kiểm tra user đã đăng nhập và token chưa hết hạn.
+ * Nếu token hết hạn → tự động xoá session và trả về false.
  */
 export function isAuthenticated(): boolean {
-  return Boolean(getAccessToken());
+  const token = getAccessToken();
+  if (!token) return false;
+
+  // Mock demo tokens không có exp → luôn hợp lệ
+  if (token.startsWith("mock-jwt-token")) return true;
+
+  if (isTokenExpired(token)) {
+    // Token hết hạn → dọn session, bắt user đăng nhập lại
+    logout();
+    return false;
+  }
+
+  return true;
 }
 
 /**
- * Clear session and logout
+ * Clear session from both storages (để chắc chắn không còn sót)
  */
 export function logout(): void {
-  localStorage.removeItem(STORAGE_KEYS.TOKEN);
-  localStorage.removeItem(STORAGE_KEYS.USER);
+  for (const key of Object.values(STORAGE_KEYS)) {
+    localStorage.removeItem(key);
+    sessionStorage.removeItem(key);
+  }
+  // Xóa thêm các key tương thích ngược
+  localStorage.removeItem("token");
+  localStorage.removeItem("user");
+  sessionStorage.removeItem("token");
+  sessionStorage.removeItem("user");
 }
 
 /**
