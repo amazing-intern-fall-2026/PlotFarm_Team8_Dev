@@ -58,11 +58,12 @@ export const JWT_SECRET = process.env.JWT_SECRET || 'plotfarm_jwt_secret_key_def
 export const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '1d';
 export const BCRYPT_SALT_ROUNDS = parseInt(process.env.BCRYPT_SALT_ROUNDS, 10) || 10;
 
-// Email SMTP configuration (optional - falls back to console log in dev mode)
-export const SMTP_HOST = process.env.SMTP_HOST || '';
-export const SMTP_PORT = parseInt(process.env.SMTP_PORT, 10) || 587;
-export const SMTP_USER = process.env.SMTP_USER || '';
-export const SMTP_PASS = process.env.SMTP_PASS || '';
-export const SMTP_SECURE = toBoolean(process.env.SMTP_SECURE || 'false');
-export const EMAIL_FROM = process.env.EMAIL_FROM || '"PlotFarm Portal" <no-reply@plotfarm.com>';
+// Email SMTP configuration (Nodemailer / Gmail SMTP)
+export const MAIL_HOST = process.env.MAIL_HOST || process.env.SMTP_HOST || 'smtp.gmail.com';
+export const MAIL_PORT = parseInt(process.env.MAIL_PORT || process.env.SMTP_PORT || '587', 10);
+export const MAIL_SECURE = toBoolean(process.env.MAIL_SECURE || process.env.SMTP_SECURE || 'false');
+export const MAIL_USER = process.env.MAIL_USER || process.env.SMTP_USER || '';
+export const MAIL_APP_PASSWORD = process.env.MAIL_APP_PASSWORD || process.env.SMTP_PASS || '';
+export const MAIL_FROM_NAME = process.env.MAIL_FROM_NAME || 'PlotFarm';
+export const OTP_EXPIRES_MINUTES = parseInt(process.env.OTP_EXPIRES_MINUTES || '5', 10);
 

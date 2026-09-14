@@ -1,4 +1,4 @@
-// src/services/authService.js
+import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { getPool } from '../config/database.js';
@@ -7,7 +7,7 @@ import { AppError } from '../utils/AppError.js';
 import { runInTransaction } from '../utils/transactionHelper.js';
 import * as authRepo from '../repositories/authRepository.js';
 import * as emailService from './emailService.js';
-import { JWT_SECRET, JWT_EXPIRES_IN, BCRYPT_SALT_ROUNDS, NODE_ENV } from '../config/config.js';
+import { JWT_SECRET, JWT_EXPIRES_IN, BCRYPT_SALT_ROUNDS, OTP_EXPIRES_MINUTES } from '../config/config.js';
 
 /** Register a new customer and linked account inside a transaction */
 export const registerUser = async (payload) => {
@@ -152,26 +152,44 @@ const maskEmail = (email) => {
 };
 
 /**
- * Request password reset — generate OTP, store hash, send email
+ * Request password reset — generate OTP via crypto, invalidate old OTPs, store hash, send email
  */
 export const requestPasswordReset = async (identifier) => {
   const accountInfo = await authRepo.findAccountWithContactByIdentifier(identifier);
   if (!accountInfo) throw new AppError('Không tìm thấy tài khoản hoặc email trong hệ thống', 404);
   if (!accountInfo.email) throw new AppError('Tài khoản này chưa được cấu hình email liên hệ', 400);
 
-  // Generate 6-digit OTP
-  const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-  const otpHash = await bcrypt.hash(otpCode, BCRYPT_SALT_ROUNDS);
-  const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+  // Invalidate any previous unused OTPs for this user
+  await authRepo.invalidateActiveOtpsByUsername(accountInfo.username);
 
-  await authRepo.createPasswordResetRecord({ username: accountInfo.username, email: accountInfo.email, otpHash, expiresAt });
-  await emailService.sendPasswordResetOtpEmail(accountInfo.email, otpCode, accountInfo.username);
+  // Generate a cryptographically secure 6-digit OTP
+  const otpCode = crypto.randomInt(100000, 1000000).toString();
+  const otpHash = await bcrypt.hash(otpCode, BCRYPT_SALT_ROUNDS);
+
+  // Expiration time (default 5 minutes)
+  const expiresInMinutes = OTP_EXPIRES_MINUTES || 5;
+  const expiresAt = new Date(Date.now() + expiresInMinutes * 60 * 1000);
+
+  // Store hashed OTP in database
+  await authRepo.createPasswordResetRecord({
+    username: accountInfo.username,
+    email: accountInfo.email,
+    otpHash,
+    expiresAt,
+  });
+
+  // Send real email via Gmail SMTP (throws error if SMTP fails)
+  await emailService.sendPasswordResetOtpEmail(
+    accountInfo.email,
+    otpCode,
+    accountInfo.username,
+    expiresInMinutes
+  );
 
   return {
     username: accountInfo.username,
     emailMasked: maskEmail(accountInfo.email),
-    expiresInMinutes: 15,
-    ...(NODE_ENV !== 'production' ? { devOtp: otpCode } : {}),
+    expiresInMinutes,
   };
 };
 

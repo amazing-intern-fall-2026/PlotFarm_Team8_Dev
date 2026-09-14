@@ -1,26 +1,30 @@
 // src/services/emailService.js
 import nodemailer from 'nodemailer';
 import {
-  SMTP_HOST,
-  SMTP_PORT,
-  SMTP_USER,
-  SMTP_PASS,
-  SMTP_SECURE,
-  EMAIL_FROM,
-  NODE_ENV,
+  MAIL_HOST,
+  MAIL_PORT,
+  MAIL_SECURE,
+  MAIL_USER,
+  MAIL_APP_PASSWORD,
+  MAIL_FROM_NAME,
+  OTP_EXPIRES_MINUTES,
 } from '../config/config.js';
+import { AppError } from '../utils/AppError.js';
 
 let transporter = null;
 
-const getTransporter = () => {
-  if (!transporter && SMTP_HOST && SMTP_USER) {
+export const getTransporter = () => {
+  if (!transporter) {
+    if (!MAIL_USER || !MAIL_APP_PASSWORD) {
+      return null;
+    }
     transporter = nodemailer.createTransport({
-      host: SMTP_HOST,
-      port: SMTP_PORT,
-      secure: SMTP_SECURE,
+      host: MAIL_HOST,
+      port: MAIL_PORT,
+      secure: MAIL_SECURE,
       auth: {
-        user: SMTP_USER,
-        pass: SMTP_PASS,
+        user: MAIL_USER,
+        pass: MAIL_APP_PASSWORD,
       },
     });
   }
@@ -28,16 +32,29 @@ const getTransporter = () => {
 };
 
 /**
- * Send Password Reset OTP Email
- * @param {string} toEmail - Recipient email
- * @param {string} otpCode - 6-digit OTP code
- * @param {string} username - User account name
- * @returns {Promise<{success: boolean, mocked: boolean}>}
+ * Gửi email chứa mã OTP đặt lại mật khẩu bằng Gmail SMTP
+ * @param {string} toEmail - Email nhận mã
+ * @param {string} otpCode - Mã OTP 6 chữ số
+ * @param {string} username - Tên tài khoản
+ * @param {number} expiresInMinutes - Thời hạn hiệu lực của OTP
  */
-export const sendPasswordResetOtpEmail = async (toEmail, otpCode, username = '') => {
+export const sendPasswordResetOtpEmail = async (
+  toEmail,
+  otpCode,
+  username = '',
+  expiresInMinutes = OTP_EXPIRES_MINUTES
+) => {
   const mailTransporter = getTransporter();
 
-  // HTML email template
+  if (!mailTransporter) {
+    throw new AppError(
+      'Hệ thống gửi email chưa được cấu hình. Vui lòng liên hệ quản trị viên.',
+      500
+    );
+  }
+
+  const fromAddress = `"${MAIL_FROM_NAME}" <${MAIL_USER}>`;
+
   const htmlContent = `
     <div style="font-family: Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 12px; background-color: #ffffff;">
       <div style="text-align: center; margin-bottom: 24px;">
@@ -63,7 +80,7 @@ export const sendPasswordResetOtpEmail = async (toEmail, otpCode, username = '')
         </div>
 
         <p style="color: #ef4444; font-size: 14px; font-weight: 500;">
-          * Mã này có hiệu lực trong 15 phút. Tuyệt đối không chia sẻ mã này cho bất kỳ ai.
+          * Mã này có hiệu lực trong ${expiresInMinutes} phút và chỉ được sử dụng một lần. Tuyệt đối không chia sẻ mã này cho bất kỳ ai.
         </p>
 
         <p style="color: #6b7280; font-size: 13px; margin-top: 24px; line-height: 1.5;">
@@ -77,31 +94,22 @@ export const sendPasswordResetOtpEmail = async (toEmail, otpCode, username = '')
     </div>
   `;
 
-  if (!mailTransporter) {
-    // Development / Test fallback - log OTP to console
-    console.log('\n==================================================');
-    console.log('📢 [PlotFarm EMAIL SERVICE - DEV/FALLBACK MODE]');
-    console.log(`To: ${toEmail}`);
-    console.log(`Username: ${username}`);
-    console.log(`Mã OTP: [ ${otpCode} ] (Hạn 15 phút)`);
-    console.log('==================================================\n');
-    return { success: true, mocked: true };
-  }
-
   try {
     await mailTransporter.sendMail({
-      from: EMAIL_FROM,
+      from: fromAddress,
       to: toEmail,
       subject: `[PlotFarm] Mã xác thực đặt lại mật khẩu: ${otpCode}`,
       html: htmlContent,
     });
-    return { success: true, mocked: false };
+    return { success: true };
   } catch (error) {
-    console.error('Lỗi khi gửi email qua SMTP:', error);
-    if (NODE_ENV !== 'production') {
-      console.log(`[FALLBACK] Mã OTP cho ${toEmail}: ${otpCode}`);
-      return { success: true, mocked: true, warning: 'SMTP failed, OTP logged to console' };
+    // Phân loại lỗi SMTP và thông báo thân thiện, không làm lộ mật khẩu
+    if (error.code === 'EAUTH' || error.responseCode === 535) {
+      throw new AppError('Không thể xác thực với máy chủ Gmail SMTP (sai tài khoản hoặc App Password)', 500);
     }
-    throw error;
+    if (error.code === 'ESOCKET' || error.code === 'ETIMEDOUT' || error.code === 'ECONNREFUSED') {
+      throw new AppError('Không thể kết nối đến máy chủ gửi email. Vui lòng thử lại sau.', 500);
+    }
+    throw new AppError(`Gửi email thất bại: ${error.message || 'Lỗi không xác định'}`, 500);
   }
 };

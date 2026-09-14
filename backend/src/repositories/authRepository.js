@@ -207,6 +207,14 @@ export const findLatestValidResetOtp = async (username, transaction) => {
   return result.recordset[0] || null;
 };
 
+/** Invalidate (cancel) all unused OTPs for a username when requesting a new one */
+export const invalidateActiveOtpsByUsername = async (username, transaction) => {
+  const request = new sql.Request(transaction || getPool());
+  await request
+    .input('username', sql.VarChar, username)
+    .query(`UPDATE dbo.DATLAIMATKHAU SET IsUsed = 1 WHERE TenDangNhap = @username AND IsUsed = 0`);
+};
+
 /** Mark OTP record as used */
 export const markOtpAsUsed = async (id, transaction) => {
   const request = new sql.Request(transaction || getPool());

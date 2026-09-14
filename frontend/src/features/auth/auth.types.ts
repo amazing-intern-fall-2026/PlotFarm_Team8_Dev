@@ -78,7 +78,6 @@ export interface ForgotPasswordResponseData {
   username: string;
   emailMasked: string;
   expiresInMinutes: number;
-  devOtp?: string;
 }
 
 export interface ResetPasswordRequest {

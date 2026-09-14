@@ -24,11 +24,17 @@ const mockAuthRepo = {
   findAccountWithContactByIdentifier: jest.fn(),
   createPasswordResetRecord: jest.fn(),
   findLatestValidResetOtp: jest.fn(),
+  invalidateActiveOtpsByUsername: jest.fn(),
   markOtpAsUsed: jest.fn(),
   updateAccountPassword: jest.fn(),
 };
 
+const mockEmailService = {
+  sendPasswordResetOtpEmail: jest.fn().mockResolvedValue({ success: true }),
+};
+
 jest.unstable_mockModule('../src/repositories/authRepository.js', () => mockAuthRepo);
+jest.unstable_mockModule('../src/services/emailService.js', () => mockEmailService);
 jest.unstable_mockModule('../src/utils/transactionHelper.js', () => ({
   runInTransaction: jest.fn(async (cb) => {
     return await cb(mockTransaction);
@@ -444,13 +450,15 @@ describe('Authentication Test Suite', () => {
       const result = await authService.requestPasswordReset('farmer1');
       expect(result.username).toBe('farmer1');
       expect(result.emailMasked).toBeDefined();
-      expect(result.expiresInMinutes).toBe(15);
+      expect(result.expiresInMinutes).toBe(5);
+      expect(mockAuthRepo.invalidateActiveOtpsByUsername).toHaveBeenCalledWith('farmer1');
       expect(mockAuthRepo.createPasswordResetRecord).toHaveBeenCalledWith(
         expect.objectContaining({
           username: 'farmer1',
           email: 'farmer@plotfarm.com',
         })
       );
+      expect(mockEmailService.sendPasswordResetOtpEmail).toHaveBeenCalled();
     });
 
     test('resetPassword should throw error if account not found', async () => {

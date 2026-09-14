@@ -239,7 +239,6 @@ export async function forgotPassword(
   payload: ForgotPasswordRequest,
 ): Promise<ApiResponse<ForgotPasswordResponseData>> {
   const trimmed = payload.identifier.trim();
-  const matchedDemo = findMatchingDemoAccount(trimmed);
 
   let response: Response | null = null;
   let networkFailed = false;
@@ -252,20 +251,6 @@ export async function forgotPassword(
     });
   } catch {
     networkFailed = true;
-  }
-
-  // Demo fallback when offline
-  if (networkFailed && matchedDemo) {
-    return {
-      success: true,
-      message: "Mã xác thực đặt lại mật khẩu đã được gửi (Chế độ Demo kiểm thử)",
-      data: {
-        username: matchedDemo.username,
-        emailMasked: matchedDemo.email.replace(/(.{2})(.*)(@.*)/, "$1***$3"),
-        expiresInMinutes: 15,
-        devOtp: "123456",
-      },
-    };
   }
 
   if (networkFailed) {
@@ -292,7 +277,6 @@ export async function resetPassword(
 ): Promise<ApiResponse<{ username: string }>> {
   const trimmedIdentifier = payload.identifier.trim();
   const trimmedOtp = payload.otp.trim();
-  const matchedDemo = findMatchingDemoAccount(trimmedIdentifier);
 
   let response: Response | null = null;
   let networkFailed = false;
@@ -305,15 +289,6 @@ export async function resetPassword(
     });
   } catch {
     networkFailed = true;
-  }
-
-  // Demo fallback when offline
-  if (networkFailed && matchedDemo && trimmedOtp === "123456") {
-    return {
-      success: true,
-      message: "Đặt lại mật khẩu thành công (Chế độ Demo). Bạn có thể đăng nhập ngay.",
-      data: { username: matchedDemo.username },
-    };
   }
 
   if (networkFailed) {

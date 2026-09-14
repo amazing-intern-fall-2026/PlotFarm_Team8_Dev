@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState, useEffect, type FormEvent } from "react";
 import { forgotPassword, resetPassword } from "../auth/auth.api";
 import type { BackendError } from "../auth/auth.types";
 import { Button, Input, Alert } from "../../components/ui";
@@ -7,6 +7,8 @@ interface ForgotPasswordFormProps {
   onSwitchToLogin: () => void;
   onSuccess?: () => void;
 }
+
+const RESEND_COOLDOWN_SECONDS = 60;
 
 export default function ForgotPasswordForm({
   onSwitchToLogin,
@@ -21,9 +23,11 @@ export default function ForgotPasswordForm({
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  // Metadata from step 1
+  // Masked email from step 1
   const [maskedEmail, setMaskedEmail] = useState("");
-  const [devOtpCode, setDevOtpCode] = useState<string | null>(null);
+
+  // Cooldown countdown for resending OTP
+  const [cooldown, setCooldown] = useState(0);
 
   // Error & loading states
   const [loading, setLoading] = useState(false);
@@ -32,6 +36,15 @@ export default function ForgotPasswordForm({
 
   // Validation errors
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  // Countdown timer effect
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = setInterval(() => {
+      setCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [cooldown]);
 
   // Handle Step 1: Send OTP
   async function handleSendOtp(e: FormEvent) {
@@ -48,15 +61,13 @@ export default function ForgotPasswordForm({
       setLoading(true);
       const res = await forgotPassword({ identifier: identifier.trim() });
       setMaskedEmail(res.data?.emailMasked || "");
-      if (res.data?.devOtp) {
-        setDevOtpCode(res.data.devOtp);
-      }
-      setSuccessMsg(`Mã xác thực OTP đã được gửi đến: ${res.data?.emailMasked || "email của bạn"}`);
+      setSuccessMsg("Mã xác thực đã được gửi đến email của bạn.");
+      setCooldown(RESEND_COOLDOWN_SECONDS);
       setStep(2);
     } catch (err: unknown) {
       const backendErr = err as BackendError;
       setErrorMsg(
-        backendErr?.message || "Không thể gửi mã xác nhận. Vui lòng kiểm tra lại thông tin.",
+        backendErr?.message || "Không thể gửi mã xác nhận. Vui lòng kiểm tra lại thông tin."
       );
     } finally {
       setLoading(false);
@@ -106,7 +117,7 @@ export default function ForgotPasswordForm({
     } catch (err: unknown) {
       const backendErr = err as BackendError;
       setErrorMsg(
-        backendErr?.message || "Đặt lại mật khẩu thất bại. Vui lòng kiểm tra lại mã OTP.",
+        backendErr?.message || "Đặt lại mật khẩu thất bại. Vui lòng kiểm tra lại mã OTP."
       );
     } finally {
       setLoading(false);
@@ -115,14 +126,13 @@ export default function ForgotPasswordForm({
 
   // Resend OTP
   async function handleResendOtp() {
+    if (cooldown > 0 || loading) return;
     setErrorMsg(null);
     try {
       setLoading(true);
-      const res = await forgotPassword({ identifier: identifier.trim() });
-      if (res.data?.devOtp) {
-        setDevOtpCode(res.data.devOtp);
-      }
-      setSuccessMsg("Đã gửi lại mã OTP mới. Vui lòng kiểm tra email.");
+      await forgotPassword({ identifier: identifier.trim() });
+      setSuccessMsg("Mã xác thực đã được gửi đến email của bạn.");
+      setCooldown(RESEND_COOLDOWN_SECONDS);
     } catch (err: unknown) {
       const backendErr = err as BackendError;
       setErrorMsg(backendErr?.message || "Không thể gửi lại mã OTP. Vui lòng thử lại sau.");
@@ -142,7 +152,7 @@ export default function ForgotPasswordForm({
         </h2>
         <p className="mt-1 text-xs text-gray-500">
           {step === 1 && "Nhập email hoặc tên tài khoản của bạn để nhận mã xác thực"}
-          {step === 2 && `Mã xác nhận đã được gửi đến: ${maskedEmail || "email của bạn"}`}
+          {step === 2 && `Mã xác thực đã được gửi đến: ${maskedEmail || "email của bạn"}`}
           {step === 3 && "Mật khẩu của bạn đã được cập nhật thành công"}
         </p>
       </div>
@@ -166,7 +176,7 @@ export default function ForgotPasswordForm({
           <Input
             label="Email hoặc Tên tài khoản"
             type="text"
-            placeholder="Ví dụ: farmer@plotfarm.com hoặc farmer1"
+            placeholder="Ví dụ: your_email@gmail.com hoặc username"
             value={identifier}
             disabled={loading}
             error={fieldErrors.identifier}
@@ -205,25 +215,6 @@ export default function ForgotPasswordForm({
       {/* Step 2 Form */}
       {step === 2 && (
         <form onSubmit={handleResetPassword} className="space-y-4" noValidate>
-          {/* Dev/Demo Hint Tool */}
-          {devOtpCode && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800 flex items-center justify-between">
-              <div>
-                <span className="font-semibold">Mã OTP thử nghiệm (Dev/Demo): </span>
-                <span className="font-mono font-bold text-amber-950 text-sm tracking-wider">
-                  {devOtpCode}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setOtp(devOtpCode)}
-                className="rounded bg-amber-200 px-2 py-1 text-2xs font-semibold text-amber-900 hover:bg-amber-300 transition cursor-pointer"
-              >
-                Tự động điền
-              </button>
-            </div>
-          )}
-
           <Input
             label="Mã xác thực OTP (6 số)"
             type="text"
@@ -301,11 +292,15 @@ export default function ForgotPasswordForm({
           <div className="flex items-center justify-between text-xs pt-1">
             <button
               type="button"
-              disabled={loading}
+              disabled={loading || cooldown > 0}
               onClick={handleResendOtp}
-              className="font-medium text-emerald-600 hover:text-emerald-700 hover:underline cursor-pointer disabled:opacity-50"
+              className={`font-medium ${
+                cooldown > 0
+                  ? "text-gray-400 cursor-not-allowed"
+                  : "text-emerald-600 hover:text-emerald-700 hover:underline cursor-pointer"
+              }`}
             >
-              Gửi lại mã OTP
+              {cooldown > 0 ? `Gửi lại mã sau (${cooldown}s)` : "Gửi lại mã OTP"}
             </button>
             <button
               type="button"
