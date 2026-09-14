@@ -13,11 +13,13 @@ import { Button, Input, Alert } from "../../components/ui";
 
 interface LoginFormProps {
   onSwitchToRegister?: () => void;
+  onSwitchToForgotPassword?: () => void;
   onSuccessRedirect?: string;
 }
 
 export default function LoginForm({
   onSwitchToRegister,
+  onSwitchToForgotPassword,
   onSuccessRedirect,
 }: LoginFormProps) {
   const navigate = useNavigate();
@@ -222,16 +224,19 @@ export default function LoginForm({
             />
             <span>Ghi nhớ đăng nhập</span>
           </label>
-          <a
-            href="#forgot-password"
-            onClick={(e) => {
-              e.preventDefault();
-              alert("Tính năng quên mật khẩu đang kết nối với hệ thống xác thực. Vui lòng liên hệ Quản trị viên.");
+          <button
+            type="button"
+            onClick={() => {
+              if (onSwitchToForgotPassword) {
+                onSwitchToForgotPassword();
+              } else {
+                navigate("/forgot-password");
+              }
             }}
-            className="font-medium text-emerald-600 hover:text-emerald-700 hover:underline"
+            className="font-medium text-emerald-600 hover:text-emerald-700 hover:underline cursor-pointer"
           >
             Quên mật khẩu?
-          </a>
+          </button>
         </div>
 
         <Button type="submit" loading={loading} variant="primary">
