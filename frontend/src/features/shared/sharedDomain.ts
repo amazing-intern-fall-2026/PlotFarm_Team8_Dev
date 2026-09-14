@@ -80,17 +80,30 @@ export interface SharedContractItem {
 export interface SharedFarmingLogItem {
   id: string;
   plot: string;
+  plotId?: string;
+  contractId?: string;
   date: string;
   activity: string;
   plantStatus: string;
+  progress?: number;
   description: string;
   imageEvidence?: string;
   createdBy: string;
+  sensorData?: {
+    moisture?: number;
+    temperature?: number;
+    soilPh?: number;
+    lightLux?: number;
+    lastUpdated?: string;
+  };
 }
 
 export interface SharedCareRequestItem {
   id: string;
   plot: string;
+  plotId?: string;
+  contractId?: string;
+  farmName?: string;
   customer: string;
   customerId?: string;
   requestType: string;
@@ -100,11 +113,15 @@ export interface SharedCareRequestItem {
   farmerNote?: string;
   evidenceImage?: string;
   processedDate?: string;
+  farmerName?: string;
 }
 
 export interface SharedHarvestItem {
   id: string;
+  contractId?: string;
   plot: string;
+  plotId?: string;
+  farmName?: string;
   customer: string;
   customerId?: string;
   plantCrop: string;

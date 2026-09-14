@@ -32,6 +32,32 @@ export default function CustomerDashboard({
   );
 
   useEffect(() => {
+    let isMounted = true;
+    async function hydrateLiveDashboard() {
+      try {
+        await Promise.all([
+          customerService.fetchMyContractsAsync(),
+          customerService.fetchFarmingLogsAsync(),
+          customerService.fetchMyCareRequestsAsync(),
+          customerService.fetchMyHarvestsAsync(),
+        ]);
+        if (isMounted) {
+          setKpi(customerService.getKPISummary());
+          setPlots(customerService.getMyPlots());
+          setLogs(customerService.getMyFarmingLogs());
+          setRequests(customerService.getMyCareRequests());
+        }
+      } catch (err) {
+        console.warn("Lỗi khi tải dữ liệu tổng quan từ API:", err);
+      }
+    }
+    hydrateLiveDashboard();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
     function handleDataSync() {
       setKpi(customerService.getKPISummary());
       setPlots(customerService.getMyPlots());

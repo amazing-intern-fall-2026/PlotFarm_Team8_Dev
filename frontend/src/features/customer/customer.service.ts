@@ -8,6 +8,7 @@ import {
 import {
   DEMO_CUSTOMERS,
   INITIAL_SHARED_FARMS,
+  type CareRequestStatus,
   type SharedCareRequestItem,
   type SharedContractItem,
   type SharedCustomerProfile,
@@ -93,6 +94,75 @@ export interface BackendContractDto {
   UpdatedAt?: string;
 }
 
+export interface BackendFarmingLogDto {
+  MaNhatKy: string;
+  MaHopDong: string;
+  MaODat: string;
+  NgayGhi: string;
+  HoatDong: string;
+  GiaiDoanCay: string;
+  TienDoPhanTram: number;
+  MoTa?: string | null;
+  HinhAnhMinhChung?: string | null;
+  NguoiGhi?: string | null;
+  TenNguoiGhi?: string | null;
+  TenODat?: string | null;
+  DoAmDat?: number | null;
+  NhietDo?: number | null;
+  DoPH?: number | null;
+  AnhSangLux?: number | null;
+  MaKH?: string | null;
+  CreatedAt?: string;
+  UpdatedAt?: string;
+}
+
+export interface BackendCareRequestDto {
+  MaYeuCau: string;
+  MaHopDong: string;
+  MaKH: string;
+  LoaiYeuCau: string;
+  MoTa: string;
+  TrangThai: "PENDING" | "IN_PROGRESS" | "COMPLETED" | "REJECTED";
+  GhiChuPhanHoi?: string | null;
+  HinhAnhKetQua?: string | null;
+  NguoiXuLy?: string | null;
+  TenNguoiXuLy?: string | null;
+  MaODat?: string | null;
+  TenODat?: string | null;
+  MaNongTrai?: string | null;
+  TenNongTrai?: string | null;
+  TenKH?: string | null;
+  CreatedAt?: string;
+  CompletedAt?: string | null;
+  UpdatedAt?: string | null;
+}
+
+export interface BackendHarvestDto {
+  MaThuHoach: string;
+  MaHopDong: string;
+  NgayThuHoachDuKien: string;
+  NgayThuHoachThucTe?: string | null;
+  SanLuongDuKien: string;
+  SanLuongThucTe?: string | null;
+  TrangThaiThuHoach: "SCHEDULED" | "IN_PROGRESS" | "HARVESTED" | "CANCELLED";
+  TrangThaiDongGoi: "NOT_PACKED" | "PACKED" | "STORAGE_COOL";
+  TrangThaiGiaoHang: "WAITING_PICKUP" | "DELIVERING" | "DELIVERED";
+  DiaChiGiaoHang: string;
+  MaVanDon?: string | null;
+  GhiChu?: string | null;
+  MaKH?: string | null;
+  TenKH?: string | null;
+  MaODat?: string | null;
+  TenODat?: string | null;
+  MaNongTrai?: string | null;
+  TenNongTrai?: string | null;
+  MaCayTrong?: string | null;
+  TenCayTrong?: string | null;
+  LoaiCay?: string | null;
+  CreatedAt?: string;
+  UpdatedAt?: string | null;
+}
+
 // ─── DTO to Domain Mappers ───────────────────────────────────────────────────
 export function mapBackendFarmToShared(f: BackendFarmDto): SharedFarmItem {
   const areaNum = Number(f.TongDienTich || 20000);
@@ -170,6 +240,114 @@ export function mapBackendContractToShared(c: BackendContractDto): SharedContrac
   };
 }
 
+export function mapBackendFarmingLogToShared(dto: BackendFarmingLogDto): SharedFarmingLogItem {
+  const dateStr = dto.NgayGhi
+    ? new Date(dto.NgayGhi).toLocaleString("vi-VN", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "14/09/2026 08:30";
+
+  return {
+    id: dto.MaNhatKy,
+    plot: dto.TenODat || (dto.MaODat ? `#PL-${dto.MaODat}` : "Thửa đất"),
+    plotId: dto.MaODat,
+    contractId: dto.MaHopDong,
+    date: dateStr,
+    activity: dto.HoatDong,
+    plantStatus: dto.GiaiDoanCay,
+    progress: dto.TienDoPhanTram ?? 0,
+    description: dto.MoTa || "",
+    imageEvidence: dto.HinhAnhMinhChung || undefined,
+    createdBy: dto.TenNguoiGhi || dto.NguoiGhi || "Kỹ sư canh tác PlotFarm",
+    sensorData: {
+      moisture: Number(dto.DoAmDat ?? 68),
+      temperature: Number(dto.NhietDo ?? 26.5),
+      soilPh: Number(dto.DoPH ?? 6.5),
+      lightLux: Number(dto.AnhSangLux ?? 15000),
+      lastUpdated: "Thời gian thực (IoT)",
+    },
+  };
+}
+
+export function mapBackendCareRequestToShared(dto: BackendCareRequestDto): SharedCareRequestItem {
+  const createdStr = dto.CreatedAt
+    ? new Date(dto.CreatedAt).toLocaleString("vi-VN", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "";
+  const completedStr = dto.CompletedAt
+    ? new Date(dto.CompletedAt).toLocaleString("vi-VN", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "";
+
+  let status: CareRequestStatus = "PENDING";
+  if (dto.TrangThai === "REJECTED") status = "CANNOT_RESOLVE";
+  else if (dto.TrangThai === "IN_PROGRESS" || dto.TrangThai === "COMPLETED") {
+    status = dto.TrangThai;
+  }
+
+  return {
+    id: dto.MaYeuCau,
+    contractId: dto.MaHopDong,
+    plot: dto.TenODat || (dto.MaODat ? `#PL-${dto.MaODat}` : "Thửa đất"),
+    plotId: dto.MaODat || undefined,
+    farmName: dto.TenNongTrai || undefined,
+    customer: dto.TenKH || "Khách hàng",
+    customerId: dto.MaKH,
+    requestType: dto.LoaiYeuCau,
+    description: dto.MoTa,
+    createdDate: createdStr,
+    status,
+    farmerNote: dto.GhiChuPhanHoi || undefined,
+    evidenceImage: dto.HinhAnhKetQua || undefined,
+    processedDate: completedStr || undefined,
+    farmerName: dto.TenNguoiXuLy || undefined,
+  };
+}
+
+export function mapBackendHarvestToShared(dto: BackendHarvestDto): SharedHarvestItem {
+  const expectedDate = dto.NgayThuHoachDuKien
+    ? new Date(dto.NgayThuHoachDuKien).toLocaleDateString("vi-VN")
+    : "";
+  const actualDate = dto.NgayThuHoachThucTe
+    ? new Date(dto.NgayThuHoachThucTe).toLocaleDateString("vi-VN")
+    : undefined;
+
+  return {
+    id: dto.MaThuHoach,
+    contractId: dto.MaHopDong,
+    plot: dto.TenODat || (dto.MaODat ? `#PL-${dto.MaODat}` : "Thửa đất"),
+    plotId: dto.MaODat || undefined,
+    farmName: dto.TenNongTrai || undefined,
+    customer: dto.TenKH || "Khách hàng",
+    customerId: dto.MaKH || undefined,
+    plantCrop: dto.TenCayTrong || "Nông sản sạch",
+    expectedHarvestDate: expectedDate,
+    actualHarvestDate: actualDate,
+    expectedQuantity: dto.SanLuongDuKien,
+    actualQuantity: dto.SanLuongThucTe || undefined,
+    harvestStatus: dto.TrangThaiThuHoach,
+    packageStatus: dto.TrangThaiDongGoi,
+    deliveryStatus: dto.TrangThaiGiaoHang,
+    deliveryAddress: dto.DiaChiGiaoHang,
+    trackingCode: dto.MaVanDon || undefined,
+    note: dto.GhiChu || undefined,
+  };
+}
+
 // ─── Local Storage Keys & Event Dispatcher ────────────────────────────────────
 const STORAGE_KEYS = {
   PLOTS: "pf_farmer_plots",
@@ -213,6 +391,9 @@ let cachedFarms: SharedFarmItem[] = [];
 let cachedPlots: SharedPlotItem[] = [];
 let cachedCrops: BackendCropDto[] = [];
 let cachedContracts: SharedContractItem[] = [];
+let cachedLogs: SharedFarmingLogItem[] = [];
+let cachedRequests: SharedCareRequestItem[] = [];
+let cachedHarvests: SharedHarvestItem[] = [];
 
 // ─── Customer Service Object ─────────────────────────────────────────────────
 export const customerService = {
@@ -449,6 +630,95 @@ export const customerService = {
     return { plot: updatedPlot, contract };
   },
 
+  // ─── Task 15: Asynchronous Farming Logs API ───────────────────────────────
+  async fetchFarmingLogsAsync(contractId?: string, plotId?: string): Promise<SharedFarmingLogItem[]> {
+    try {
+      const params = new URLSearchParams();
+      if (contractId && contractId !== "ALL") params.append("contractId", contractId);
+      if (plotId && plotId !== "ALL") params.append("plotId", plotId);
+      const queryStr = params.toString();
+      const url = queryStr ? `/farming-logs?${queryStr}` : "/farming-logs";
+
+      const dtos = await apiClient.get<BackendFarmingLogDto[]>(url);
+      if (Array.isArray(dtos)) {
+        const mapped = dtos.map(mapBackendFarmingLogToShared);
+        cachedLogs = mapped;
+        if (mapped.length > 0) {
+          setStoredData(STORAGE_KEYS.LOGS, mapped);
+        }
+        return mapped;
+      }
+    } catch (err) {
+      console.warn("Lỗi khi tải danh sách nhật ký canh tác từ API /farming-logs:", err);
+    }
+    return this.getMyFarmingLogs();
+  },
+
+  // ─── Task 16: Asynchronous Care Requests API (No Mock Data) ───────────────
+  async fetchMyCareRequestsAsync(): Promise<SharedCareRequestItem[]> {
+    try {
+      const dtos = await apiClient.get<BackendCareRequestDto[]>("/care-requests/my");
+      if (Array.isArray(dtos)) {
+        const mapped = dtos.map(mapBackendCareRequestToShared);
+        cachedRequests = mapped;
+        setStoredData(STORAGE_KEYS.REQUESTS, mapped);
+        return mapped;
+      }
+    } catch (err) {
+      console.warn("Lỗi khi tải danh sách yêu cầu chăm sóc từ API /care-requests/my:", err);
+    }
+    return this.getMyCareRequests();
+  },
+
+  async createCareRequestAsync(payload: CreateCareRequestPayload): Promise<SharedCareRequestItem> {
+    let contractId = payload.contractId;
+    if (!contractId && payload.plotCode) {
+      const myContracts = await this.fetchMyContractsAsync();
+      const matched = myContracts.find(
+        (c) => c.plotCode === payload.plotCode || c.plotId === payload.plotCode || c.id === payload.plotCode,
+      );
+      if (matched) contractId = matched.id;
+    }
+
+    if (!contractId) {
+      throw new Error("Vui lòng chọn hợp đồng thuê có hiệu lực để gửi yêu cầu chăm sóc.");
+    }
+
+    // Call real Backend API: POST /api/v1/care-requests
+    const responseDto = await apiClient.post<BackendCareRequestDto>("/care-requests", {
+      maHopDong: contractId,
+      loaiYeuCau: payload.requestType,
+      moTa: payload.description.trim(),
+    });
+
+    const newRequest = mapBackendCareRequestToShared(responseDto);
+
+    // Update in-memory cache and localStorage
+    cachedRequests = [newRequest, ...cachedRequests.filter((r) => r.id !== newRequest.id)];
+    setStoredData(STORAGE_KEYS.REQUESTS, cachedRequests);
+
+    notifyDataChanged("care_request_created", newRequest);
+    return newRequest;
+  },
+
+  // ─── Task 17: Asynchronous Harvest & Delivery API ─────────────────────────
+  async fetchMyHarvestsAsync(): Promise<SharedHarvestItem[]> {
+    try {
+      const dtos = await apiClient.get<BackendHarvestDto[]>("/harvests/my");
+      if (Array.isArray(dtos)) {
+        const mapped = dtos.map(mapBackendHarvestToShared);
+        cachedHarvests = mapped;
+        if (mapped.length > 0) {
+          setStoredData(STORAGE_KEYS.HARVESTS, mapped);
+        }
+        return mapped;
+      }
+    } catch (err) {
+      console.warn("Lỗi khi tải danh sách thu hoạch từ API /harvests/my:", err);
+    }
+    return this.getMyHarvests();
+  },
+
   // ─── Synchronous Fallback Methods ──────────────────────────────────────────
   getAllFarms(): SharedFarmItem[] {
     if (cachedFarms.length > 0) return cachedFarms;
@@ -519,6 +789,7 @@ export const customerService = {
 
   // 4. Farming Logs
   getAllFarmingLogs(): SharedFarmingLogItem[] {
+    if (cachedLogs.length > 0) return cachedLogs;
     return getStoredData<SharedFarmingLogItem[]>(
       STORAGE_KEYS.LOGS,
       INITIAL_FARMING_LOGS,
@@ -526,6 +797,7 @@ export const customerService = {
   },
 
   getMyFarmingLogs(customerId?: string): SharedFarmingLogItem[] {
+    if (cachedLogs.length > 0) return cachedLogs;
     const myPlotCodes = new Set(this.getMyPlots(customerId).map((p) => p.plotCode));
     const allLogs = this.getAllFarmingLogs();
     return allLogs.filter((log) => myPlotCodes.has(log.plot));
@@ -533,6 +805,7 @@ export const customerService = {
 
   // 5. Care Requests
   getAllCareRequests(): SharedCareRequestItem[] {
+    if (cachedRequests.length > 0) return cachedRequests;
     return getStoredData<SharedCareRequestItem[]>(
       STORAGE_KEYS.REQUESTS,
       INITIAL_CARE_REQUESTS as unknown as SharedCareRequestItem[],
@@ -540,6 +813,7 @@ export const customerService = {
   },
 
   getMyCareRequests(customerId?: string): SharedCareRequestItem[] {
+    if (cachedRequests.length > 0) return cachedRequests;
     const activeCustId = customerId || this.getActiveCustomerId();
     const profile = this.getActiveCustomerProfile(activeCustId);
     const myPlotCodes = new Set(this.getMyPlots(activeCustId).map((p) => p.plotCode));
@@ -568,6 +842,7 @@ export const customerService = {
     const randomSuffix = Math.floor(Math.random() * 900) + 100;
     const newRequest: SharedCareRequestItem = {
       id: `REQ-${randomSuffix}`,
+      contractId: payload.contractId,
       plot: payload.plotCode,
       customerId: profile.id,
       customer: profile.name,
@@ -581,6 +856,7 @@ export const customerService = {
     };
 
     const updated = [newRequest, ...allRequests];
+    cachedRequests = updated;
     setStoredData(STORAGE_KEYS.REQUESTS, updated);
 
     notifyDataChanged("care_request_created", newRequest);
@@ -589,6 +865,7 @@ export const customerService = {
 
   // 6. Harvests
   getAllHarvests(): SharedHarvestItem[] {
+    if (cachedHarvests.length > 0) return cachedHarvests;
     return getStoredData<SharedHarvestItem[]>(
       STORAGE_KEYS.HARVESTS,
       INITIAL_HARVESTS as unknown as SharedHarvestItem[],
@@ -596,6 +873,7 @@ export const customerService = {
   },
 
   getMyHarvests(customerId?: string): SharedHarvestItem[] {
+    if (cachedHarvests.length > 0) return cachedHarvests;
     const activeCustId = customerId || this.getActiveCustomerId();
     const profile = this.getActiveCustomerProfile(activeCustId);
     const myPlotCodes = new Set(this.getMyPlots(activeCustId).map((p) => p.plotCode));

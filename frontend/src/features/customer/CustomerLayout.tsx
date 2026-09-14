@@ -24,12 +24,30 @@ export default function CustomerLayout() {
 
   // Sync state whenever customer or data changes
   useEffect(() => {
+    let isMounted = true;
+    async function initLayoutData() {
+      try {
+        await Promise.all([
+          customerService.fetchMyContractsAsync(),
+          customerService.fetchMyCareRequestsAsync(),
+          customerService.fetchMyHarvestsAsync(),
+        ]);
+        if (isMounted) {
+          setActiveCustomer(customerService.getActiveCustomerProfile());
+        }
+      } catch (err) {
+        console.warn("Lỗi khi tải dữ liệu badge:", err);
+      }
+    }
+    initLayoutData();
+
     function handleSync() {
       setActiveCustomer(customerService.getActiveCustomerProfile());
     }
     window.addEventListener("pf_data_changed", handleSync);
     window.addEventListener("pf_farmer_changed", handleSync);
     return () => {
+      isMounted = false;
       window.removeEventListener("pf_data_changed", handleSync);
       window.removeEventListener("pf_farmer_changed", handleSync);
     };

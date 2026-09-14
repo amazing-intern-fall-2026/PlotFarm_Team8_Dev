@@ -8,6 +8,10 @@ const BASE_SELECT = `
         NK.*,
         NV.Ho + ' ' + NV.Ten AS TenNguoiGhi,
         OD.TenODat,
+        OD.DoAmDat,
+        OD.NhietDo,
+        OD.DoPH,
+        OD.AnhSangLux,
         HD.MaKH
     FROM dbo.NHATKYCANHTAC NK
     LEFT JOIN dbo.NHANVIEN      NV ON NK.NguoiGhi  = NV.MaNV
