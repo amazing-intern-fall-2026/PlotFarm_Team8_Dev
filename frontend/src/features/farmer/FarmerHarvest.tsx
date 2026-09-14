@@ -10,6 +10,10 @@ export default function FarmerHarvest() {
   const [successMessage, setSuccessMessage] = useState("");
 
   useEffect(() => {
+    farmerService.fetchFarmerDataAsync().catch((err) => {
+      console.warn("fetchFarmerDataAsync error in FarmerHarvest:", err);
+    });
+
     function handleSync() {
       setProfile(farmerService.getFarmerProfile());
       setHarvests(farmerService.getHarvests());
@@ -98,6 +102,24 @@ export default function FarmerHarvest() {
     setHarvests((prev) => prev.map((h) => (h.id === updated.id ? updated : h)));
     setEditingHarvest(null);
     setSuccessMessage(`Đã cập nhật thông tin vụ thu hoạch #${updated.id} thành công!`);
+    setTimeout(() => setSuccessMessage(""), 3500);
+  }
+
+  function handleStartHarvest(harvest: HarvestItem) {
+    const updated = farmerService.updateHarvest(harvest.id, {
+      harvestStatus: "IN_PROGRESS",
+    });
+    setHarvests((prev) => prev.map((h) => (h.id === updated.id ? updated : h)));
+    setSuccessMessage(`Đã bắt đầu thu hoạch vụ #${harvest.id}!`);
+    setTimeout(() => setSuccessMessage(""), 3500);
+  }
+
+  function handleMarkPacked(harvest: HarvestItem) {
+    const updated = farmerService.updateHarvest(harvest.id, {
+      packageStatus: "PACKED",
+    });
+    setHarvests((prev) => prev.map((h) => (h.id === updated.id ? updated : h)));
+    setSuccessMessage(`Đã đánh dấu đóng gói hoàn tất cho vụ #${harvest.id}!`);
     setTimeout(() => setSuccessMessage(""), 3500);
   }
 
@@ -272,14 +294,46 @@ export default function FarmerHarvest() {
 
                   {/* Action */}
                   <td className="py-3.5 px-3 text-right whitespace-nowrap">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      fullWidth={false}
-                      onClick={() => handleOpenEdit(h)}
-                    >
-                      Ghi nhận
-                    </Button>
+                    <div className="flex items-center justify-end gap-1.5">
+                      {h.harvestStatus === "SCHEDULED" && (
+                        <button
+                          type="button"
+                          onClick={() => handleStartHarvest(h)}
+                          className="px-2 py-1 rounded bg-amber-500 hover:bg-amber-600 text-white font-semibold text-2xs transition"
+                          title="Bắt đầu thu hoạch nông sản"
+                        >
+                          Bắt đầu
+                        </button>
+                      )}
+                      {h.harvestStatus === "IN_PROGRESS" && (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEdit(h)}
+                          className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-2xs transition"
+                          title="Nhập sản lượng thực tế và hoàn tất"
+                        >
+                          Nhập sản lượng
+                        </button>
+                      )}
+                      {h.harvestStatus === "HARVESTED" && h.packageStatus !== "PACKED" && (
+                        <button
+                          type="button"
+                          onClick={() => handleMarkPacked(h)}
+                          className="px-2 py-1 rounded bg-blue-600 hover:bg-blue-700 text-white font-semibold text-2xs transition"
+                          title="Đánh dấu đã đóng gói sẵn sàng giao"
+                        >
+                          Đóng gói
+                        </button>
+                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        fullWidth={false}
+                        onClick={() => handleOpenEdit(h)}
+                      >
+                        Chi tiết
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))

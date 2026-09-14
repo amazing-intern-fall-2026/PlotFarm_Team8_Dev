@@ -34,6 +34,7 @@ export interface CustomerKPISummary {
 }
 
 export interface CreateCareRequestPayload {
+  contractId?: string;
   plotCode: string;
   requestType: string;
   description: string;

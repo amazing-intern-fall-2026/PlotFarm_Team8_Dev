@@ -25,6 +25,53 @@ export default function CustomerPlots({
   const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
 
   useEffect(() => {
+    let mounted = true;
+
+    async function loadLivePlots() {
+      const contracts = await customerService.fetchMyContractsAsync();
+      if (!mounted) return;
+
+      if (contracts.length > 0) {
+        const livePlots: SharedPlotItem[] = contracts.map((c) => ({
+          id: c.plotId,
+          plotCode: c.plotCode,
+          farmId: "",
+          farmName: c.farmName,
+          assignedFarmerId: "",
+          farmerName: c.assignedFarmerName || "Kỹ sư canh tác PlotFarm",
+          plotStatus: "IN_USE",
+          customerId: c.customerId,
+          customerName: c.customerName,
+          contractId: c.id,
+          plantCrop: c.plantCrop,
+          startDate: c.startDate,
+          endDate: c.endDate,
+          plantStatus: "Phát triển tốt",
+          progress: 35,
+          lastUpdate: "Hệ thống IoT ghi nhận",
+          areaSquareMeter: 500,
+          rentalPricePerMonth: c.monthlyFee,
+          sensorData: {
+            moisture: 68,
+            temperature: 26.5,
+            soilPh: 6.5,
+            lightLux: 15000,
+            lastUpdated: "Thời gian thực (IoT)",
+          },
+          cameraFeedUrl: "https://images.unsplash.com/photo-1592417817098-8f3d6910985b?w=1200&auto=format&fit=crop&q=80",
+          plotThumbnail: "https://images.unsplash.com/photo-1592417817098-8f3d6910985b?w=600&auto=format&fit=crop&q=80",
+        }));
+
+        setPlots(livePlots);
+        setSelectedPlot((prev) => {
+          if (!prev) return livePlots[0];
+          const found = livePlots.find((p) => p.id === prev.id);
+          return found || livePlots[0];
+        });
+      }
+    }
+    loadLivePlots();
+
     function handleDataSync() {
       const updatedPlots = customerService.getMyPlots();
       setPlots(updatedPlots);
@@ -39,6 +86,7 @@ export default function CustomerPlots({
     window.addEventListener("pf_data_changed", handleDataSync);
     window.addEventListener("pf_farmer_changed", handleDataSync);
     return () => {
+      mounted = false;
       window.removeEventListener("pf_data_changed", handleDataSync);
       window.removeEventListener("pf_farmer_changed", handleDataSync);
     };

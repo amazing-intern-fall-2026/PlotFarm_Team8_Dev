@@ -12,6 +12,8 @@ export default function FarmerRequests() {
   const [successMessage, setSuccessMessage] = useState("");
 
   useEffect(() => {
+    farmerService.fetchFarmerDataAsync().catch(console.error);
+
     function handleSync() {
       setProfile(farmerService.getFarmerProfile());
       setRequests(farmerService.getCareRequests());
@@ -23,6 +25,7 @@ export default function FarmerRequests() {
       window.removeEventListener("pf_data_changed", handleSync);
     };
   }, []);
+
 
   // Process Modal State
   const [processingReq, setProcessingReq] = useState<CareRequestItem | null>(null);

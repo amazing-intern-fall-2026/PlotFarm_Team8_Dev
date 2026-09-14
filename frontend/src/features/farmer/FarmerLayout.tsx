@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { getCurrentUser, logout } from "../auth/auth.api";
+import { getCurrentUser } from "../auth/auth.api";
 import { useAuth } from "../auth/AuthContext";
 import { Sidebar, type SidebarMenuItem } from "../../components/layout";
 import FarmerDashboard from "./FarmerDashboard";
@@ -27,6 +27,8 @@ export default function FarmerLayout() {
 
   // Sync state whenever farmer is switched or data changed
   useEffect(() => {
+    farmerService.fetchFarmerDataAsync();
+
     function handleSync() {
       setActiveProfile(farmerService.getFarmerProfile());
       setTick((t) => t + 1);
@@ -38,6 +40,7 @@ export default function FarmerLayout() {
       window.removeEventListener("pf_data_changed", handleSync);
     };
   }, []);
+
 
   // Determine active tab directly from URL pathname
   const activeTab: FarmerTab = (() => {
@@ -62,12 +65,7 @@ export default function FarmerLayout() {
 
   function handleLogout() {
     authLogout();
-    logout();
-    navigate("/login", { replace: true });
-  }
-
-  function handleQuickSwitchFarmer(id: "NV0001" | "NV0002" | "NV0003") {
-    farmerService.switchActiveFarmer(id);
+    navigate("/", { replace: true });
   }
 
   // Real-time badge counts from farmerService scoped to active farmer
@@ -140,50 +138,7 @@ export default function FarmerLayout() {
             </p>
           </div>
 
-          {/* Quick Demo Farmer Switcher in Header for effortless testing */}
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <div className="flex items-center gap-1 bg-emerald-50/90 border border-emerald-200 px-2 py-1 rounded-lg">
-              <span className="text-2xs font-bold uppercase text-emerald-900 mr-1 flex items-center gap-1">
-                <span>🧪</span>
-                <span className="hidden md:inline">Test Nông Dân:</span>
-              </span>
-              <button
-                type="button"
-                onClick={() => handleQuickSwitchFarmer("NV0001")}
-                className={`px-2 py-0.5 rounded text-2xs font-semibold cursor-pointer transition ${
-                  activeProfile.id === "NV0001"
-                    ? "bg-emerald-700 text-white shadow-xs"
-                    : "text-gray-700 hover:bg-emerald-100"
-                }`}
-                title="Lê Văn Canh Tác (Lâm Đồng & Bảo Lộc)"
-              >
-                👨‍🌾 Farmer 1
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickSwitchFarmer("NV0002")}
-                className={`px-2 py-0.5 rounded text-2xs font-semibold cursor-pointer transition ${
-                  activeProfile.id === "NV0002"
-                    ? "bg-emerald-700 text-white shadow-xs"
-                    : "text-gray-700 hover:bg-emerald-100"
-                }`}
-                title="Nguyễn Thị Đồng Ruộng (Củ Chi)"
-              >
-                👩‍🌾 Farmer 2
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickSwitchFarmer("NV0003")}
-                className={`px-2 py-0.5 rounded text-2xs font-semibold cursor-pointer transition ${
-                  activeProfile.id === "NV0003"
-                    ? "bg-emerald-700 text-white shadow-xs"
-                    : "text-gray-700 hover:bg-emerald-100"
-                }`}
-                title="Trần Văn Vườn (Mê Kông)"
-              >
-                🧑‍🌾 Farmer 3
-              </button>
-            </div>
+          <div className="flex items-center gap-2 text-xs">
 
             <button
               type="button"

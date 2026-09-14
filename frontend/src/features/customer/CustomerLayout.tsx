@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { getCurrentUser, logout } from "../auth/auth.api";
+import { getCurrentUser } from "../auth/auth.api";
 import { useAuth } from "../auth/AuthContext";
 import { Sidebar, type SidebarMenuItem } from "../../components/layout";
 import CustomerDashboard from "./CustomerDashboard";
@@ -24,12 +24,30 @@ export default function CustomerLayout() {
 
   // Sync state whenever customer or data changes
   useEffect(() => {
+    let isMounted = true;
+    async function initLayoutData() {
+      try {
+        await Promise.all([
+          customerService.fetchMyContractsAsync(),
+          customerService.fetchMyCareRequestsAsync(),
+          customerService.fetchMyHarvestsAsync(),
+        ]);
+        if (isMounted) {
+          setActiveCustomer(customerService.getActiveCustomerProfile());
+        }
+      } catch (err) {
+        console.warn("Lỗi khi tải dữ liệu badge:", err);
+      }
+    }
+    initLayoutData();
+
     function handleSync() {
       setActiveCustomer(customerService.getActiveCustomerProfile());
     }
     window.addEventListener("pf_data_changed", handleSync);
     window.addEventListener("pf_farmer_changed", handleSync);
     return () => {
+      isMounted = false;
       window.removeEventListener("pf_data_changed", handleSync);
       window.removeEventListener("pf_farmer_changed", handleSync);
     };
@@ -59,13 +77,7 @@ export default function CustomerLayout() {
 
   function handleLogout() {
     authLogout();
-    logout();
-    navigate("/login", { replace: true });
-  }
-
-  function handleQuickSwitchCustomer(id: string) {
-    customerService.switchActiveCustomer(id);
-    setActiveCustomer(customerService.getActiveCustomerProfile());
+    navigate("/", { replace: true });
   }
 
   function handleOpenCreateRequest(plotCode?: string) {
@@ -148,64 +160,6 @@ export default function CustomerLayout() {
             </p>
           </div>
 
-          {/* Quick Switchers: Demo Customer + Jump to Farmer Portal */}
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            {/* Customer Switcher */}
-            <div className="flex items-center gap-1 bg-emerald-50/90 border border-emerald-200 px-2 py-1 rounded-lg">
-              <span className="text-2xs font-bold uppercase text-emerald-900 mr-1 flex items-center gap-1">
-                <span>🧪</span>
-                <span className="hidden md:inline">Test Khách:</span>
-              </span>
-              <button
-                type="button"
-                onClick={() => handleQuickSwitchCustomer("KH0001")}
-                className={`px-2 py-0.5 rounded text-2xs font-semibold cursor-pointer transition ${
-                  activeCustomer.id === "KH0001"
-                    ? "bg-emerald-700 text-white shadow-xs"
-                    : "text-gray-700 hover:bg-emerald-100"
-                }`}
-                title="Nguyễn Văn Nông (Thửa #PL-0192 Lúa ST25)"
-              >
-                👨‍💼 Nông (#0192)
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickSwitchCustomer("KH0002")}
-                className={`px-2 py-0.5 rounded text-2xs font-semibold cursor-pointer transition ${
-                  activeCustomer.id === "KH0002"
-                    ? "bg-emerald-700 text-white shadow-xs"
-                    : "text-gray-700 hover:bg-emerald-100"
-                }`}
-                title="Trần Thị Mai (Thửa #PL-0205 Cà chua bi)"
-              >
-                👩‍💼 Mai (#0205)
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickSwitchCustomer("KH0003")}
-                className={`px-2 py-0.5 rounded text-2xs font-semibold cursor-pointer transition ${
-                  activeCustomer.id === "KH0003"
-                    ? "bg-emerald-700 text-white shadow-xs"
-                    : "text-gray-700 hover:bg-emerald-100"
-                }`}
-                title="Hoàng Minh Tuấn (Thửa #PL-0311 Dưa lưới)"
-              >
-                🧑‍💻 Tuấn (#0311)
-              </button>
-            </div>
-
-            {/* Quick jump to Farmer Portal button for effortless testing */}
-            <button
-              type="button"
-              onClick={() => navigate("/farmer")}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-teal-50 border border-teal-200 text-teal-800 hover:bg-teal-100 transition cursor-pointer font-semibold text-xs shadow-2xs"
-              title="Chuyển sang Cổng Nông Dân để xử lý yêu cầu hoặc cập nhật tiến độ"
-            >
-              <span>👨‍🌾</span>
-              <span className="hidden sm:inline">Cổng Nông Dân</span>
-              <span>→</span>
-            </button>
-          </div>
         </header>
 
         {/* Content Body */}

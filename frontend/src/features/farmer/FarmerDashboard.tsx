@@ -64,6 +64,10 @@ export default function FarmerDashboard({ onNavigateTab }: FarmerDashboardProps)
 
   // Listen to farmer switch event for seamless testing
   useEffect(() => {
+    farmerService.fetchFarmerDataAsync().catch((err) => {
+      console.warn("fetchFarmerDataAsync error in FarmerDashboard:", err);
+    });
+
     function handleSync() {
       const nextProfile = farmerService.getFarmerProfile();
       setProfile(nextProfile);

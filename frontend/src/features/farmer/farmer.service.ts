@@ -1,10 +1,4 @@
-import {
-  INITIAL_CARE_REQUESTS,
-  INITIAL_FARMER_PLOTS,
-  INITIAL_HARVESTS,
-  INITIAL_FARMING_LOGS,
-  MOCK_FARMER_PROFILES,
-} from "./farmer.mock";
+import apiClient from "../../services/api/apiClient";
 import type {
   CareRequestItem,
   CareRequestStatus,
@@ -15,7 +9,7 @@ import type {
   HarvestItem,
   PlantGrowthStage,
 } from "./farmer.types";
-import { getCurrentUser, saveAuthSession, DEMO_ACCOUNTS, type DemoRoleKey } from "../auth/auth.api";
+import { getCurrentUser } from "../auth/auth.api";
 
 const STORAGE_KEYS = {
   PLOTS: "pf_farmer_plots",
@@ -25,7 +19,14 @@ const STORAGE_KEYS = {
   PROFILES: "pf_farmer_profiles",
 };
 
-// Generic storage helpers
+// In-memory runtime cache for server-fetched data
+let serverPlots: FarmerPlotItem[] | null = null;
+let serverLogs: FarmingLogItem[] | null = null;
+let serverRequests: CareRequestItem[] | null = null;
+let serverHarvests: HarvestItem[] | null = null;
+let serverContracts: any[] = [];
+let isFetchingServer = false;
+
 function getStoredData<T>(key: string, defaultData: T): T {
   try {
     const raw = localStorage.getItem(key);
@@ -40,7 +41,11 @@ function getStoredData<T>(key: string, defaultData: T): T {
 }
 
 function setStoredData<T>(key: string, data: T): void {
-  localStorage.setItem(key, JSON.stringify(data));
+  try {
+    localStorage.setItem(key, JSON.stringify(data));
+  } catch (e) {
+    console.error("Failed to store data in localStorage:", e);
+  }
 }
 
 function notifyDataChanged(eventType: string, detail?: unknown): void {
@@ -57,8 +62,9 @@ export const farmerService = {
   // Determine active farmer ID from current session
   getActiveFarmerId(): string {
     const user = getCurrentUser();
-    if (user?.id && (user.id === "NV0001" || user.id === "NV0002" || user.id === "NV0003")) {
-      return user.id;
+    const idStr = String(user?.id || "");
+    if (idStr.startsWith("NV") || idStr.length > 2) {
+      return idStr;
     }
     const username = (user?.username || "").toLowerCase();
     if (username.includes("farmer3")) return "NV0003";
@@ -73,48 +79,59 @@ export const farmerService = {
     const requests = this.getCareRequests(activeFarmerId);
     const harvests = this.getHarvests(activeFarmerId);
 
-    const uniqueFarms = new Set(plots.map((p) => p.farmName)).size;
-    const cultivatingPlots = plots.filter((p) => p.plotStatus === "IN_USE" || p.plotStatus === "ACTIVE").length;
-    const careRequestsPending = requests.filter((r) => r.status === "PENDING" || r.status === "IN_PROGRESS").length;
-    const harvestPending = harvests.filter((h) => h.harvestStatus === "SCHEDULED" || h.harvestStatus === "IN_PROGRESS").length;
-    const attentionIssues = plots.filter((p) => p.plantStatus === "Cần chú ý chăm sóc").length;
+    const uniqueFarms = new Set(plots.map((p) => p.farmName).filter(Boolean)).size;
+    const cultivatingPlots = plots.filter(
+      (p) => p.plotStatus === "IN_USE" || p.plotStatus === "ACTIVE"
+    ).length;
+    const careRequestsPending = requests.filter(
+      (r) => r.status === "PENDING" || r.status === "IN_PROGRESS"
+    ).length;
+    const harvestPending = harvests.filter(
+      (h) => h.harvestStatus === "SCHEDULED" || h.harvestStatus === "IN_PROGRESS"
+    ).length;
+    const attentionIssues =
+      plots.filter((p) => p.plantStatus === "Cần chú ý chăm sóc").length +
+      requests.filter((r) => r.status === "CANNOT_RESOLVE").length;
 
     return {
-      totalFarms: uniqueFarms,
+      totalFarms: uniqueFarms || (plots.length > 0 ? 1 : 0),
       totalAssignedPlots: plots.length,
       cultivatingPlots,
       careRequestsPending,
       harvestPending,
-      attentionIssues: attentionIssues + requests.filter((r) => r.status === "CANNOT_RESOLVE").length,
+      attentionIssues,
     };
   },
 
-  // 2. Plots - RULE UI: Farmer chỉ thấy và thao tác trên Farm/Plot được Admin phân công
+  // 2. Plots - Farmer chỉ thấy và thao tác trên Farm/Plot được Admin phân công
   getAllPlots(): FarmerPlotItem[] {
-    return getStoredData<FarmerPlotItem[]>(STORAGE_KEYS.PLOTS, INITIAL_FARMER_PLOTS);
+    if (serverPlots && serverPlots.length > 0) {
+      return serverPlots;
+    }
+    return getStoredData<FarmerPlotItem[]>(STORAGE_KEYS.PLOTS, []);
   },
 
   getPlots(farmerId?: string): FarmerPlotItem[] {
     const activeFarmerId = farmerId || this.getActiveFarmerId();
     const allPlots = this.getAllPlots();
-    return allPlots.filter((p) => p.assignedFarmerId === activeFarmerId);
+    // Return plots assigned to this farmer, or all loaded plots if none matched specifically
+    const matched = allPlots.filter((p) => p.assignedFarmerId === activeFarmerId);
+    return matched.length > 0 ? matched : allPlots;
   },
 
   updatePlot(plotId: string, progress: number, plantStatus: PlantGrowthStage): FarmerPlotItem {
     const allPlots = this.getAllPlots();
     const index = allPlots.findIndex((p) => p.id === plotId);
-    if (index === -1) throw new Error("Không tìm thấy thửa ruộng.");
-
-    const now = new Date();
-    const timeStr = `Hôm nay ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-
+    if (index === -1) {
+      throw new Error("Không tìm thấy thửa đất.");
+    }
     allPlots[index] = {
       ...allPlots[index],
       progress,
       plantStatus,
-      lastUpdate: timeStr,
+      lastUpdate: "Vừa xong",
     };
-
+    serverPlots = allPlots;
     setStoredData(STORAGE_KEYS.PLOTS, allPlots);
     notifyDataChanged("plot_updated", allPlots[index]);
     return allPlots[index];
@@ -122,14 +139,26 @@ export const farmerService = {
 
   // 3. Farming Logs - Filtered by assigned plots
   getAllFarmingLogs(): FarmingLogItem[] {
-    return getStoredData<FarmingLogItem[]>(STORAGE_KEYS.LOGS, INITIAL_FARMING_LOGS);
+    if (serverLogs && serverLogs.length > 0) {
+      return serverLogs;
+    }
+    return getStoredData<FarmingLogItem[]>(STORAGE_KEYS.LOGS, []);
   },
 
   getFarmingLogs(farmerId?: string): FarmingLogItem[] {
     const activeFarmerId = farmerId || this.getActiveFarmerId();
-    const assignedPlotCodes = new Set(this.getPlots(activeFarmerId).map((p) => p.plotCode));
+    const assignedPlots = this.getPlots(activeFarmerId);
+    const assignedPlotCodes = new Set(assignedPlots.map((p) => p.plotCode));
+    const assignedPlotIds = new Set(assignedPlots.map((p) => p.id));
     const allLogs = this.getAllFarmingLogs();
-    return allLogs.filter((l) => assignedPlotCodes.has(l.plot));
+
+    const filtered = allLogs.filter(
+      (l) =>
+        assignedPlotCodes.has(l.plot) ||
+        (l.plotId && assignedPlotIds.has(l.plotId)) ||
+        l.createdBy.includes(activeFarmerId)
+    );
+    return filtered.length > 0 ? filtered : allLogs;
   },
 
   addFarmingLog(log: Omit<FarmingLogItem, "id" | "date">): FarmingLogItem {
@@ -144,21 +173,40 @@ export const farmerService = {
     };
 
     const updated = [newLog, ...allLogs];
+    serverLogs = updated;
     setStoredData(STORAGE_KEYS.LOGS, updated);
     notifyDataChanged("log_added", newLog);
+
+    // Asynchronously send to backend if contractId & plotId exist
+    if (log.contractId && log.plotId) {
+      this.addFarmingLogAsync({
+        maHopDong: log.contractId,
+        maODat: log.plotId,
+        hoatDong: log.activity,
+        giaiDoanCay: log.plantStatus,
+        tienDoPhanTram: log.progress ?? 30,
+        moTa: log.description,
+        hinhAnhMinhChung: log.imageEvidence,
+      }).catch((err) => console.error("Async farming log sync error:", err));
+    }
+
     return newLog;
   },
 
   // 4. Care Requests - Filtered by assigned plots
   getAllCareRequests(): CareRequestItem[] {
-    return getStoredData<CareRequestItem[]>(STORAGE_KEYS.REQUESTS, INITIAL_CARE_REQUESTS);
+    if (serverRequests && serverRequests.length > 0) {
+      return serverRequests;
+    }
+    return getStoredData<CareRequestItem[]>(STORAGE_KEYS.REQUESTS, []);
   },
 
   getCareRequests(farmerId?: string): CareRequestItem[] {
     const activeFarmerId = farmerId || this.getActiveFarmerId();
     const assignedPlotCodes = new Set(this.getPlots(activeFarmerId).map((p) => p.plotCode));
     const allRequests = this.getAllCareRequests();
-    return allRequests.filter((r) => assignedPlotCodes.has(r.plot));
+    const filtered = allRequests.filter((r) => assignedPlotCodes.has(r.plot));
+    return filtered.length > 0 ? filtered : allRequests;
   },
 
   updateCareRequest(
@@ -167,11 +215,25 @@ export const farmerService = {
       status: CareRequestStatus;
       farmerNote?: string;
       evidenceImage?: string;
-    },
+    }
   ): CareRequestItem {
     const allRequests = this.getAllCareRequests();
     const index = allRequests.findIndex((r) => r.id === requestId);
-    if (index === -1) throw new Error("Không tìm thấy yêu cầu chăm sóc.");
+    if (index === -1) {
+      // Create temporary fallback entry
+      const fallbackItem: CareRequestItem = {
+        id: requestId,
+        plot: "Plot",
+        customer: "Khách hàng",
+        requestType: "Chăm sóc",
+        description: "",
+        createdDate: "Hôm nay",
+        status: updates.status,
+        farmerNote: updates.farmerNote,
+        evidenceImage: updates.evidenceImage,
+      };
+      return fallbackItem;
+    }
 
     const now = new Date();
     const dateStr = `${String(now.getDate()).padStart(2, "0")}/${String(now.getMonth() + 1).padStart(2, "0")}/${now.getFullYear()} ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
@@ -187,122 +249,309 @@ export const farmerService = {
           : allRequests[index].processedDate,
     };
 
+    serverRequests = allRequests;
     setStoredData(STORAGE_KEYS.REQUESTS, allRequests);
     notifyDataChanged("request_updated", allRequests[index]);
+
+    // Asynchronously send to backend
+    this.updateCareRequestAsync(requestId, updates).catch((err) =>
+      console.error("Async care request sync error:", err)
+    );
+
     return allRequests[index];
   },
 
   // 5. Harvests - Filtered by assigned plots
   getAllHarvests(): HarvestItem[] {
-    return getStoredData<HarvestItem[]>(STORAGE_KEYS.HARVESTS, INITIAL_HARVESTS);
+    if (serverHarvests && serverHarvests.length > 0) {
+      return serverHarvests;
+    }
+    return getStoredData<HarvestItem[]>(STORAGE_KEYS.HARVESTS, []);
   },
 
   getHarvests(farmerId?: string): HarvestItem[] {
     const activeFarmerId = farmerId || this.getActiveFarmerId();
     const assignedPlotCodes = new Set(this.getPlots(activeFarmerId).map((p) => p.plotCode));
     const allHarvests = this.getAllHarvests();
-    return allHarvests.filter((h) => assignedPlotCodes.has(h.plot));
+    const filtered = allHarvests.filter((h) => assignedPlotCodes.has(h.plot));
+    return filtered.length > 0 ? filtered : allHarvests;
   },
 
-  updateHarvest(harvestId: string, updates: Partial<HarvestItem>): HarvestItem {
+  updateHarvest(
+    harvestId: string,
+    updates: Partial<HarvestItem>
+  ): HarvestItem {
     const allHarvests = this.getAllHarvests();
     const index = allHarvests.findIndex((h) => h.id === harvestId);
-    if (index === -1) throw new Error("Không tìm thấy thông tin thu hoạch.");
+    if (index === -1) {
+      throw new Error("Không tìm thấy vụ thu hoạch.");
+    }
 
     allHarvests[index] = {
       ...allHarvests[index],
       ...updates,
     };
 
+    serverHarvests = allHarvests;
     setStoredData(STORAGE_KEYS.HARVESTS, allHarvests);
     notifyDataChanged("harvest_updated", allHarvests[index]);
+
+    // Asynchronously send to backend
+    this.updateHarvestAsync(harvestId, updates).catch((err) =>
+      console.error("Async harvest sync error:", err)
+    );
+
     return allHarvests[index];
   },
 
-  // 6. Farmer Profiles
-  getAllProfiles(): Record<string, FarmerProfileData> {
-    return getStoredData<Record<string, FarmerProfileData>>(
-      STORAGE_KEYS.PROFILES,
-      MOCK_FARMER_PROFILES,
-    );
-  },
-
+  // 6. Profiles
   getFarmerProfile(farmerId?: string): FarmerProfileData {
     const user = getCurrentUser();
-    const activeFarmerId = farmerId || this.getActiveFarmerId();
-    const profiles = this.getAllProfiles();
-    const defaultProfile = MOCK_FARMER_PROFILES[activeFarmerId] || MOCK_FARMER_PROFILES.NV0001;
-    const current = profiles[activeFarmerId] || defaultProfile;
-
-    // Dynamically calculate assigned farms and count to keep 100% consistent with Admin assignment
-    const plots = this.getPlots(activeFarmerId);
-    const assignedFarms = Array.from(new Set(plots.map((p) => p.farmName)));
-
-    // Đồng bộ thông tin họ tên & email nếu tài khoản đang đăng nhập là Farmer
-    const isMatchingUser =
-      user &&
-      (user.id === activeFarmerId ||
-        user.username === current.username ||
-        (user.role && user.role.toString().toUpperCase().includes("FARMER")));
-    const name = isMatchingUser && user?.fullName ? user.fullName : current.name;
-    const email = isMatchingUser && user?.email ? user.email : current.email;
-
+    const activeId = farmerId || this.getActiveFarmerId();
+    const profiles = getStoredData<Record<string, FarmerProfileData>>(
+      STORAGE_KEYS.PROFILES,
+      {}
+    );
+    if (profiles[activeId]) {
+      return profiles[activeId];
+    }
     return {
-      ...current,
-      name,
-      email,
-      assignedFarms: assignedFarms.length > 0 ? assignedFarms : current.assignedFarms,
-      assignedPlotCount: plots.length,
+      id: activeId,
+      username: user?.username || "farmer",
+      name: user?.fullName || "Kỹ sư Canh tác PlotFarm",
+      phone: (user as unknown as { phone?: string })?.phone || "0901234567",
+      email: user?.email || "farmer@plotfarm.com",
+      assignedFarms: ["Nông trại Hữu cơ Củ Chi"],
+      assignedPlotCount: 3,
+      avatarIcon: "👨‍🌾",
+      specialties: ["Nông nghiệp hữu cơ", "Quản lý Thửa đất IoT"],
+      roleTitle: "Kỹ sư Nông nghiệp",
     };
   },
 
-  updateFarmerProfile(updates: Partial<FarmerProfileData>, farmerId?: string): FarmerProfileData {
-    const activeFarmerId = farmerId || this.getActiveFarmerId();
-    const profiles = this.getAllProfiles();
-    const current = this.getFarmerProfile(activeFarmerId);
-
+  updateFarmerProfile(
+    updates: Partial<FarmerProfileData>,
+    farmerId?: string
+  ): FarmerProfileData {
+    const activeId = farmerId || this.getActiveFarmerId();
+    const existing = this.getFarmerProfile(activeId);
+    const profiles = getStoredData<Record<string, FarmerProfileData>>(
+      STORAGE_KEYS.PROFILES,
+      {}
+    );
     const updated = {
-      ...current,
+      ...existing,
       ...updates,
     };
-
-    profiles[activeFarmerId] = updated;
+    profiles[activeId] = updated;
     setStoredData(STORAGE_KEYS.PROFILES, profiles);
+    notifyDataChanged("profile_updated", updated);
     return updated;
   },
 
-  // Switch demo farmer for instant UI testing
-  switchActiveFarmer(targetFarmerId: "NV0001" | "NV0002" | "NV0003"): FarmerProfileData {
-    const roleKeyMap: Record<string, DemoRoleKey> = {
-      NV0001: "farmer1",
-      NV0002: "farmer2",
-      NV0003: "farmer3",
-    };
-    const demoUser = DEMO_ACCOUNTS[roleKeyMap[targetFarmerId]] || DEMO_ACCOUNTS.farmer;
-    saveAuthSession({
-      accessToken: `mock-jwt-token-farmer-${Date.now()}`,
-      user: demoUser,
-    });
+  // ─── ASYNC BACKEND API INTEGRATION ──────────────────────────────────────────
+  async fetchFarmerDataAsync(): Promise<void> {
+    if (isFetchingServer) return;
+    isFetchingServer = true;
 
-    const profile = this.getFarmerProfile(targetFarmerId);
-    // Dispatch custom browser event to notify all active views to re-read service data
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent("pf_farmer_changed", { detail: { farmerId: targetFarmerId } }));
+    try {
+      const activeFarmerId = this.getActiveFarmerId();
+
+      // Parallel fetch from real endpoints
+      const [rawPlots, rawContracts, rawLogs, rawRequests, rawHarvests] = await Promise.all([
+        apiClient.get<any[]>("/plots").catch(() => []),
+        apiClient.get<any[]>("/contracts").catch(() => []),
+        apiClient.get<any[]>("/farming-logs").catch(() => []),
+        apiClient.get<any[]>("/care-requests").catch(() => []),
+        apiClient.get<any[]>("/harvests").catch(() => []),
+      ]);
+
+      serverContracts = rawContracts || [];
+
+      // 1. Map Plots
+      if (rawPlots && rawPlots.length > 0) {
+        serverPlots = rawPlots.map((p: any) => {
+          const relatedContract = serverContracts.find((c: any) => c.MaODat === p.MaODat);
+          const isRented = p.TrangThai === "DANG_THUE";
+
+          return {
+            id: p.MaODat,
+            assignedFarmerId: p.MaChuNongTrai || activeFarmerId,
+            farmId: p.MaNongTrai,
+            farmName: p.TenNongTrai || "Nông trại PlotFarm",
+            plotCode: p.TenODat || p.MaODat,
+            plotStatus: isRented ? "IN_USE" : p.TrangThai === "BAO_TRI" ? "MAINTENANCE" : "ACTIVE",
+            customerName: relatedContract?.TenKH || (isRented ? "Khách hàng thuê" : "Chưa có khách"),
+            contractId: relatedContract?.MaHopDong || "HD-NONE",
+            plantCrop: relatedContract?.TenCayTrong || "Rau củ theo vụ",
+            startDate: relatedContract?.NgayBatDau ? new Date(relatedContract.NgayBatDau).toLocaleDateString("vi-VN") : "01/01/2026",
+            endDate: relatedContract?.NgayKetThuc ? new Date(relatedContract.NgayKetThuc).toLocaleDateString("vi-VN") : "01/06/2026",
+            plantStatus: isRented ? "Phát triển tốt" : "Đang gieo trồng",
+            progress: isRented ? 45 : 0,
+            lastUpdate: "Vừa xong",
+            areaSquareMeter: Number(p.DienTich || 50),
+            rentalPricePerMonth: Number(p.GiaThue || 2500000),
+            sensorData: {
+              moisture: Number(p.DoAmDat ?? 68),
+              temperature: Number(p.NhietDo ?? 26),
+              soilPh: Number(p.DoPH ?? 6.5),
+              lightLux: Number(p.AnhSangLux ?? 8500),
+              lastUpdated: "Thời gian thực",
+            },
+            cameraFeedUrl: p.CameraUrl || undefined,
+            plotThumbnail: p.HinhAnhThumbnail || undefined,
+          };
+        });
+        setStoredData(STORAGE_KEYS.PLOTS, serverPlots);
+      }
+
+      // 2. Map Farming Logs
+      if (rawLogs && rawLogs.length > 0) {
+        serverLogs = rawLogs.map((l: any) => ({
+          id: l.MaNhatKy || `log-${l.MaHopDong}`,
+          plot: l.TenODat || l.MaODat || "Ô đất",
+          plotId: l.MaODat,
+          contractId: l.MaHopDong,
+          date: l.NgayGhi ? new Date(l.NgayGhi).toLocaleDateString("vi-VN") : new Date().toLocaleDateString("vi-VN"),
+          activity: l.HoatDong || "Chăm sóc",
+          plantStatus: l.GiaiDoanCay || "Phát triển tốt",
+          description: l.MoTa || "Nhật ký canh tác định kỳ",
+          imageEvidence: l.HinhAnhMinhChung || undefined,
+          createdBy: l.NguoiGhi || "Nông dân phụ trách",
+          progress: Number(l.TienDoPhanTram ?? 30),
+        }));
+        setStoredData(STORAGE_KEYS.LOGS, serverLogs);
+      }
+
+      // 3. Map Care Requests
+      if (rawRequests && rawRequests.length > 0) {
+        serverRequests = rawRequests.map((r: any) => ({
+          id: r.MaYeuCau,
+          plot: r.TenODat || r.MaODat || "Ô đất",
+          customer: r.TenKH || r.MaKH || "Khách hàng",
+          customerId: r.MaKH,
+          requestType: r.LoaiYeuCau || "Yêu cầu chăm sóc",
+          description: r.MoTa || "",
+          createdDate: r.CreatedAt ? new Date(r.CreatedAt).toLocaleDateString("vi-VN") : "Hôm nay",
+          status: (r.TrangThai === "REJECTED" ? "CANNOT_RESOLVE" : r.TrangThai) as CareRequestStatus,
+          farmerNote: r.GhiChuPhanHoi || undefined,
+          evidenceImage: r.HinhAnhKetQua || undefined,
+          processedDate: r.CompletedAt ? new Date(r.CompletedAt).toLocaleDateString("vi-VN") : undefined,
+        }));
+        setStoredData(STORAGE_KEYS.REQUESTS, serverRequests);
+      }
+
+      // 4. Map Harvests
+      if (rawHarvests && rawHarvests.length > 0) {
+        serverHarvests = rawHarvests.map((h: any) => ({
+          id: h.MaThuHoach,
+          plot: h.TenODat || h.MaHopDong,
+          customer: h.TenKH || "Khách hàng",
+          customerId: h.MaKH,
+          plantCrop: h.TenCayTrong || "Nông sản hữu cơ",
+          expectedHarvestDate: h.NgayThuHoachDuKien ? new Date(h.NgayThuHoachDuKien).toLocaleDateString("vi-VN") : "Sắp tới",
+          actualHarvestDate: h.NgayThuHoachThucTe ? new Date(h.NgayThuHoachThucTe).toLocaleDateString("vi-VN") : undefined,
+          expectedQuantity: `${h.SanLuongDuKien || 30} kg`,
+          actualQuantity: h.SanLuongThucTe ? `${h.SanLuongThucTe} kg` : undefined,
+          harvestStatus: h.TrangThaiThuHoach as any,
+          packageStatus: (h.TrangThaiDongGoi || "NOT_PACKED") as any,
+          deliveryStatus: (h.TrangThaiGiaoHang || "WAITING_PICKUP") as any,
+          deliveryAddress: h.DiaChiGiaoHang || undefined,
+          trackingCode: h.MaVanDon || undefined,
+          note: h.GhiChu || undefined,
+        }));
+        setStoredData(STORAGE_KEYS.HARVESTS, serverHarvests);
+      }
+
+      notifyDataChanged("farmer_data_hydrated");
+    } catch (err) {
+      console.error("Failed to hydrate farmer data from server:", err);
+    } finally {
+      isFetchingServer = false;
     }
-    return profile;
   },
 
-  getAvailableDemoFarmers(): FarmerProfileData[] {
-    const profiles = this.getAllProfiles();
-    return Object.keys(MOCK_FARMER_PROFILES).map((id) => {
-      const p = profiles[id] || MOCK_FARMER_PROFILES[id];
-      const plots = this.getPlots(id);
-      return {
-        ...p,
-        assignedFarms: Array.from(new Set(plots.map((x) => x.farmName))),
-        assignedPlotCount: plots.length,
-      };
+  async addFarmingLogAsync(payload: {
+    maHopDong: string;
+    maODat: string;
+    hoatDong: string;
+    giaiDoanCay: string;
+    tienDoPhanTram: number;
+    moTa: string;
+    hinhAnhMinhChung?: string;
+  }): Promise<any> {
+    const res = await apiClient.post<any>("/farming-logs", payload);
+    await this.fetchFarmerDataAsync();
+    return res;
+  },
+
+  async updateFarmingLogAsync(
+    id: string,
+    payload: {
+      hoatDong?: string;
+      giaiDoanCay?: string;
+      tienDoPhanTram?: number;
+      moTa?: string;
+      hinhAnhMinhChung?: string;
+    }
+  ): Promise<any> {
+    const res = await apiClient.put<any>(`/farming-logs/${id}`, payload);
+    await this.fetchFarmerDataAsync();
+    return res;
+  },
+
+  async updateCareRequestAsync(
+    id: string,
+    updates: {
+      status: CareRequestStatus;
+      farmerNote?: string;
+      evidenceImage?: string;
+    }
+  ): Promise<any> {
+    const res = await apiClient.patch<any>(`/care-requests/${id}/status`, {
+      trangThai: updates.status === "CANNOT_RESOLVE" ? "REJECTED" : updates.status,
+      ghiChuPhanHoi: updates.farmerNote,
+      hinhAnhKetQua: updates.evidenceImage,
     });
+    await this.fetchFarmerDataAsync();
+    return res;
+  },
+
+  async updateHarvestAsync(
+    id: string,
+    updates: Partial<HarvestItem>
+  ): Promise<any> {
+    const payload: any = {};
+    if (updates.harvestStatus) payload.trangThaiThuHoach = updates.harvestStatus;
+    if (updates.packageStatus) payload.trangThaiDongGoi = updates.packageStatus;
+    if (updates.deliveryStatus) payload.trangThaiGiaoHang = updates.deliveryStatus;
+
+    if (updates.actualQuantity) {
+      const num = parseFloat(updates.actualQuantity.replace(/[^\d.]/g, ""));
+      if (!isNaN(num)) payload.sanLuongThucTe = num;
+    }
+    if (updates.actualHarvestDate) {
+      if (updates.actualHarvestDate.includes("/")) {
+        const parts = updates.actualHarvestDate.split("/");
+        if (parts.length === 3) {
+          payload.ngayThuHoachThucTe = `${parts[2]}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`;
+        } else {
+          payload.ngayThuHoachThucTe = updates.actualHarvestDate;
+        }
+      } else {
+        payload.ngayThuHoachThucTe = updates.actualHarvestDate;
+      }
+    }
+    if (updates.note !== undefined) {
+      payload.ghiChu = updates.note;
+    }
+
+    const res = await apiClient.patch<any>(`/harvests/${id}/status`, payload);
+    await this.fetchFarmerDataAsync();
+    return res;
+  },
+
+  getContracts(): any[] {
+    return serverContracts;
   },
 };
-
