@@ -1,11 +1,5 @@
 import apiClient from "../../services/api/apiClient";
 import {
-  INITIAL_CARE_REQUESTS,
-  INITIAL_FARMER_PLOTS,
-  INITIAL_FARMING_LOGS,
-  INITIAL_HARVESTS,
-} from "../farmer/farmer.mock";
-import {
   DEMO_CUSTOMERS,
   INITIAL_SHARED_FARMS,
   type CareRequestStatus,
@@ -22,7 +16,7 @@ import type {
   CustomerKPISummary,
   RentPlotPayload,
 } from "./customer.types";
-import { getCurrentUser, saveAuthSession } from "../auth/auth.api";
+import { getCurrentUser } from "../auth/auth.api";
 
 // ─── Backend DTO Interfaces ──────────────────────────────────────────────────
 export interface BackendFarmDto {
@@ -446,27 +440,6 @@ export const customerService = {
     return DEMO_CUSTOMERS.KH0001;
   },
 
-  switchActiveCustomer(id: string): SharedCustomerProfile {
-    const profiles = this.getAllCustomerProfiles();
-    const target = profiles[id] || DEMO_CUSTOMERS.KH0001;
-
-    saveAuthSession({
-      accessToken: `mock-jwt-token-customer-${Date.now()}`,
-      user: {
-        id: target.id,
-        accountId: target.username,
-        username: target.username,
-        email: target.email,
-        fullName: `${target.name} (Khách Hàng)`,
-        role: "CUSTOMER",
-        userType: "CUSTOMER",
-      },
-    });
-
-    notifyDataChanged("customer_switched", { customerId: target.id });
-    return target;
-  },
-
   // ─── Task 13: Asynchronous Farm & Plot APIs ────────────────────────────────
   async fetchFarmsAsync(): Promise<SharedFarmItem[]> {
     try {
@@ -742,7 +715,7 @@ export const customerService = {
     if (cachedPlots.length > 0) return cachedPlots;
     return getStoredData<SharedPlotItem[]>(
       STORAGE_KEYS.PLOTS,
-      INITIAL_FARMER_PLOTS as unknown as SharedPlotItem[],
+      [],
     );
   },
 
@@ -765,25 +738,25 @@ export const customerService = {
   },
 
   getMyContracts(customerId?: string): SharedContractItem[] {
-    if (cachedContracts.length > 0) return cachedContracts;
-    const myPlots = this.getMyPlots(customerId);
-    const activeProfile = this.getActiveCustomerProfile(customerId);
+    const activeCustId = customerId || this.getActiveCustomerId();
+    const profile = this.getActiveCustomerProfile(activeCustId);
+    const myPlots = this.getMyPlots(activeCustId);
 
-    return myPlots.map((plot) => ({
-      id: plot.contractId || `#HD-2026-${plot.plotCode.replace("#PL-", "")}`,
-      plotId: plot.id,
-      plotCode: plot.plotCode,
-      farmName: plot.farmName,
-      customerId: activeProfile.id,
-      customerName: activeProfile.name,
-      assignedFarmerName: plot.farmerName || "Kỹ sư canh tác PlotFarm",
-      plantCrop: plot.plantCrop,
-      startDate: plot.startDate || "15/01/2026",
-      endDate: plot.endDate || "15/05/2026",
-      monthlyFee: plot.rentalPricePerMonth || 3000000,
-      status: "ACTIVE",
-      depositAmount: (plot.rentalPricePerMonth || 3000000) * 2,
-      signedDate: plot.startDate || "15/01/2026",
+    return myPlots.map((p) => ({
+      id: p.contractId || `HD-${p.id}`,
+      plotId: p.id,
+      plotCode: p.plotCode,
+      farmName: p.farmName,
+      customerId: activeCustId,
+      customerName: profile.name,
+      assignedFarmerName: p.farmerName,
+      plantCrop: p.plantCrop,
+      startDate: p.startDate,
+      endDate: p.endDate,
+      monthlyFee: p.rentalPricePerMonth,
+      depositAmount: p.rentalPricePerMonth * 2,
+      signedDate: p.startDate,
+      status: "ACTIVE" as const,
     }));
   },
 
@@ -792,7 +765,7 @@ export const customerService = {
     if (cachedLogs.length > 0) return cachedLogs;
     return getStoredData<SharedFarmingLogItem[]>(
       STORAGE_KEYS.LOGS,
-      INITIAL_FARMING_LOGS,
+      [],
     );
   },
 
@@ -808,7 +781,7 @@ export const customerService = {
     if (cachedRequests.length > 0) return cachedRequests;
     return getStoredData<SharedCareRequestItem[]>(
       STORAGE_KEYS.REQUESTS,
-      INITIAL_CARE_REQUESTS as unknown as SharedCareRequestItem[],
+      [],
     );
   },
 
@@ -868,7 +841,7 @@ export const customerService = {
     if (cachedHarvests.length > 0) return cachedHarvests;
     return getStoredData<SharedHarvestItem[]>(
       STORAGE_KEYS.HARVESTS,
-      INITIAL_HARVESTS as unknown as SharedHarvestItem[],
+      [],
     );
   },
 

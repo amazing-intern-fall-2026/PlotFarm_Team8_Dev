@@ -11,6 +11,10 @@ export default function FarmerPlots() {
   const [selectedStatus, setSelectedStatus] = useState<string>("ALL");
 
   useEffect(() => {
+    farmerService.fetchFarmerDataAsync().catch((err) => {
+      console.warn("fetchFarmerDataAsync error in FarmerPlots:", err);
+    });
+
     function handleSync() {
       setProfile(farmerService.getFarmerProfile());
       setPlots(farmerService.getPlots());

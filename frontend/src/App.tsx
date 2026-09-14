@@ -4,17 +4,10 @@ import ProtectedRoute from "./features/auth/ProtectedRoute";
 import CustomerPage from "./features/customer/CustomerPage";
 import FarmerLayout from "./features/farmer/FarmerLayout";
 import AdminLayout from "./features/admin/AdminLayout";
-import { getCurrentUser, getRedirectPathByRole, isAuthenticated } from "./features/auth/auth.api";
 import FarmDetailPage from "./features/customer/FarmDetailPage";
+import LandingPage from "./features/guest/LandingPage";
 
 export default function App() {
-  function getDefaultRedirect() {
-    if (!isAuthenticated()) {
-      return "/login";
-    }
-    const user = getCurrentUser();
-    return getRedirectPathByRole(user?.role);
-  }
 
   return (
     <Routes>
@@ -93,11 +86,8 @@ export default function App() {
       />
 
 
-      {/* Default index route: redirect to role portal if authenticated, else /login */}
-      <Route
-        path="/"
-        element={<Navigate to={getDefaultRedirect()} replace />}
-      />
+      {/* Landing Page for Guest, auto redirects to portal if already authenticated */}
+      <Route path="/" element={<LandingPage />} />
 
       {/* Catch-all route */}
       <Route path="*" element={<Navigate to="/" replace />} />

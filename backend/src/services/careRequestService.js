@@ -54,10 +54,12 @@ export const getAllCareRequests = async (user, query = {}) => {
     const trangThai = query.trangThai || query.status || query.TrangThai;
     const contractId = query.contractId || query.MaHopDong;
     const plotId = query.plotId || query.MaODat;
+    const customerId = query.customerId || query.MaKH;
 
     if (trangThai) filters.trangThai = trangThai;
     if (contractId) filters.contractId = contractId;
     if (plotId) filters.plotId = plotId;
+    if (customerId) filters.customerId = customerId;
 
     if (user.role === 'FARMER') {
         filters.farmerId = user.userId;

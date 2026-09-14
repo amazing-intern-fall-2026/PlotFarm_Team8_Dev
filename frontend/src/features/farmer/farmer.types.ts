@@ -46,7 +46,11 @@ export interface FarmingLogItem {
   description: string;
   imageEvidence?: string;
   createdBy: string;
+  progress?: number;
+  contractId?: string;
+  plotId?: string;
 }
+
 
 export type CareRequestStatus = "PENDING" | "IN_PROGRESS" | "COMPLETED" | "CANNOT_RESOLVE";
 

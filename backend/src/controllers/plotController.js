@@ -39,3 +39,11 @@ export const updateSensor = async (req, res, next) => {
         successResponse(res, { data, message: 'Cập nhật cảm biến thành công' });
     } catch (err) { next(err); }
 };
+
+export const deletePlot = async (req, res, next) => {
+    try {
+        await plotService.deletePlot(req.params.id, req.user);
+        successResponse(res, { message: 'Xóa ô đất thành công' });
+    } catch (err) { next(err); }
+};
+

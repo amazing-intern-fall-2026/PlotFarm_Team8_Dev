@@ -152,6 +152,7 @@ export const updateFarm = async (id, farmData) => {
   if (farmData.TenNongTrai) { updates.push('TenNongTrai = @tenNongTrai'); request.input('tenNongTrai', sql.NVarChar, farmData.TenNongTrai); }
   if (farmData.DiaChi) { updates.push('DiaChi = @diaChi'); request.input('diaChi', sql.NVarChar, farmData.DiaChi); }
   if (farmData.TrangThai) { updates.push('TrangThai = @trangThai'); request.input('trangThai', sql.VarChar, farmData.TrangThai); }
+  if (farmData.MaChuNongTrai) { updates.push('MaChuNongTrai = @maChuNongTrai'); request.input('maChuNongTrai', sql.VarChar, farmData.MaChuNongTrai); }
   
   updates.push('UpdatedAt = SYSUTCDATETIME()');
   

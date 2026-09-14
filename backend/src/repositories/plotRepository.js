@@ -1,6 +1,7 @@
 import sql from 'mssql';
 import { getPool } from '../config/database.js';
 import { generateIncrementalId } from '../utils/idGenerator.js';
+import { AppError } from '../utils/AppError.js';
 
 export const getAllPlots = async (filters = {}) => {
     const pool = getPool();
@@ -19,6 +20,11 @@ export const getAllPlots = async (filters = {}) => {
         query += ` AND OD.TrangThai = @trangThai`;
         request.input('trangThai', sql.VarChar, filters.trangThai);
     }
+    if (filters.farmerId) {
+        query += ` AND NT.MaChuNongTrai = @farmerId`;
+        request.input('farmerId', sql.VarChar, filters.farmerId);
+    }
+
     const result = await request.query(query);
     return result.recordset;
 };
@@ -112,3 +118,26 @@ export const updatePlotSensor = async (id, sensorData) => {
     const result = await request.query(query);
     return result.recordset[0];
 };
+
+export const deletePlot = async (id) => {
+    const pool = getPool();
+    const request = new sql.Request(pool);
+    request.input('id', sql.VarChar, id);
+
+    const checkContract = await request.query(`
+        SELECT COUNT(*) AS activeCount
+        FROM dbo.HOPDONGTHUE
+        WHERE MaODat = @id AND TrangThai = 'ACTIVE'
+    `);
+
+    if (checkContract.recordset[0]?.activeCount > 0) {
+        throw new AppError('Không thể xóa ô đất đang có hợp đồng thuê hoạt động.', 400);
+    }
+
+    await request.query(`
+        DELETE FROM dbo.NHATKYCANHTAC WHERE MaODat = @id;
+        DELETE FROM dbo.ODAT WHERE MaODat = @id;
+    `);
+    return { success: true, message: 'Đã xóa ô đất thành công' };
+};
+

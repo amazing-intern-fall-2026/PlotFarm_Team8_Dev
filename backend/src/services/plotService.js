@@ -3,8 +3,12 @@ import * as farmRepo from '../repositories/farmRepository.js';
 import { AppError } from '../utils/AppError.js';
 
 export const getPlots = async (filters = {}, user) => {
+    if (user?.role === 'FARMER') {
+        filters.farmerId = user.userId;
+    }
     return await plotRepo.getAllPlots(filters);
 };
+
 
 export const getPlotById = async (id, user) => {
     const plot = await plotRepo.getPlotById(id);
@@ -115,3 +119,21 @@ export const updateSensor = async (id, body, user) => {
 
     return await plotRepo.updatePlotSensor(id, sensorData);
 };
+
+export const deletePlot = async (id, user) => {
+    if (!['ADMIN', 'FARMER'].includes(user?.role)) {
+        throw new AppError('Bạn không có quyền xóa ô đất.', 403);
+    }
+
+    const plot = await plotRepo.getPlotById(id);
+    if (!plot) {
+        throw new AppError('Không tìm thấy ô đất', 404);
+    }
+
+    if (user.role === 'FARMER' && plot.MaChuNongTrai !== user.userId) {
+        throw new AppError('Bạn không có quyền xóa ô đất này.', 403);
+    }
+
+    return await plotRepo.deletePlot(id);
+};
+

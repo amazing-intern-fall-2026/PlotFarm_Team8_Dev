@@ -1,30 +1,26 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { getCurrentUser, logout } from "../auth/auth.api";
+import { logout } from "../auth/auth.api";
 import { useAuth } from "../auth/AuthContext";
 import { Navbar } from "../../components/layout";
-import { Card, Badge, Button, StatCard, EmptyState, Modal, Alert } from "../../components/ui";
+import { Card, Badge, Button, StatCard, EmptyState, Alert } from "../../components/ui";
 import { customerService } from "./customer.service";
 import type { SharedFarmItem, SharedPlotItem } from "./customer.types";
+import BookingWizardModal from "./BookingWizardModal";
 
 export default function FarmDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user: authUser, logout: authLogout } = useAuth();
-  const user = authUser || getCurrentUser();
+  const { logout: authLogout, user } = useAuth();
   const [farmData, setFarmData] = useState<{ farm: SharedFarmItem; plots: SharedPlotItem[] } | null>(() => {
     if (!id) return null;
     return customerService.getFarmDetail(id) || null;
   });
 
-  // Rental modal state
+  // Rental wizard state
   const [rentingPlot, setRentingPlot] = useState<SharedPlotItem | null>(null);
-  const [crops, setCrops] = useState<{ MaCayTrong: string; TenCayTrong: string; LoaiCay: string; ThoiGianThuHoach: number }[]>([]);
-  const [selectedCrop, setSelectedCrop] = useState<string>("CT001");
-  const [durationMonths, setDurationMonths] = useState<number>(6);
+  const [isWizardOpen, setIsWizardOpen] = useState<boolean>(false);
   const [successMessage, setSuccessMessage] = useState<string>("");
-  const [errorMessage, setErrorMessage] = useState<string>("");
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   useEffect(() => {
     let mounted = true;
@@ -33,11 +29,6 @@ export default function FarmDetailPage() {
       const detail = await customerService.fetchFarmDetailAsync(id);
       if (mounted && detail) {
         setFarmData(detail);
-      }
-      const cropsList = await customerService.fetchCropsAsync();
-      if (mounted && cropsList && cropsList.length > 0) {
-        setCrops(cropsList);
-        setSelectedCrop(cropsList[0].MaCayTrong);
       }
     }
     loadData();
@@ -62,43 +53,21 @@ export default function FarmDetailPage() {
 
   function handleOpenRentModal(plot: SharedPlotItem) {
     setRentingPlot(plot);
-    if (crops.length > 0) {
-      setSelectedCrop(crops[0].MaCayTrong);
-    }
-    setDurationMonths(6);
-    setErrorMessage("");
+    setIsWizardOpen(true);
   }
 
-  async function handleConfirmRent() {
-    if (!rentingPlot) return;
-    setIsSubmitting(true);
-    setErrorMessage("");
-    try {
-      const result = await customerService.rentPlotAsync({
-        plotId: rentingPlot.id,
-        cropType: selectedCrop,
-        durationMonths,
-      });
-
-      const matchedCrop = crops.find(c => c.MaCayTrong === selectedCrop);
-      const cropName = matchedCrop ? matchedCrop.TenCayTrong : result.contract.plantCrop;
-
-      setSuccessMessage(
-        `Chúc mừng bạn đã thuê thành công thửa đất ${result.plot.plotCode} (${cropName}) với mã hợp đồng ${result.contract.id}! Kỹ sư phụ trách: ${result.plot.farmerName || "PlotFarm"} đã nhận bàn giao.`,
-      );
-      setRentingPlot(null);
-
-      // Refresh live view data from server
-      if (id) {
-        const refreshed = await customerService.fetchFarmDetailAsync(id);
+  function handleBookingSuccess(result: { contract: any; plot: SharedPlotItem }) {
+    setSuccessMessage(
+      `Chúc mừng bạn đã thuê thành công thửa đất ${result.plot.plotCode} với mã hợp đồng #${result.contract.id}! Kỹ sư phụ trách đã nhận bàn giao.`
+    );
+    setIsWizardOpen(false);
+    setRentingPlot(null);
+    if (id) {
+      customerService.fetchFarmDetailAsync(id).then((refreshed) => {
         if (refreshed) {
           setFarmData(refreshed);
         }
-      }
-    } catch (err: unknown) {
-      setErrorMessage((err as Error).message || "Lỗi khi thuê thửa đất.");
-    } finally {
-      setIsSubmitting(false);
+      });
     }
   }
 
@@ -363,120 +332,17 @@ export default function FarmDetailPage() {
         </div>
       </main>
 
-      {/* Modal Thuê Thửa Đất */}
-      <Modal
-        isOpen={Boolean(rentingPlot)}
-        onClose={() => setRentingPlot(null)}
-        title={`Đăng Ký Thuê Thửa Đất: ${rentingPlot?.plotCode}`}
-        description={`Ký hợp đồng canh tác nông nghiệp với kỹ sư ${rentingPlot?.farmerName || farm.farmerInChargeName} tại ${farm.name}.`}
-        footer={
-          <>
-            <Button
-              variant="outline"
-              size="sm"
-              fullWidth={false}
-              onClick={() => setRentingPlot(null)}
-            >
-              Hủy
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              fullWidth={false}
-              onClick={handleConfirmRent}
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? "Đang xử lý ký hợp đồng..." : "Xác Nhận Thuê & Ký Hợp Đồng"}
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-4 text-xs">
-          {errorMessage && (
-            <Alert variant="error" onClose={() => setErrorMessage("")}>
-              {errorMessage}
-            </Alert>
-          )}
-
-          <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-100 space-y-1">
-            <span className="font-bold text-emerald-950 block">
-              Thông tin khách hàng đứng tên hợp đồng:
-            </span>
-            <p className="text-emerald-900">
-              Khách hàng: <strong>{activeCustomer.name}</strong> ({activeCustomer.phone})
-            </p>
-            <p className="text-emerald-800 text-2xs">
-              Địa chỉ nhận nông sản: {activeCustomer.shippingAddress}
-            </p>
-          </div>
-
-          <div>
-            <label className="block font-semibold text-gray-700 mb-1">
-              Loại cây trồng mong muốn canh tác (Danh mục hệ thống) *
-            </label>
-            <select
-              value={selectedCrop}
-              onChange={(e) => setSelectedCrop(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 p-2.5 text-xs bg-white focus:border-emerald-600 focus:outline-none"
-            >
-              {crops.length > 0 ? (
-                crops.map((crop) => (
-                  <option key={crop.MaCayTrong} value={crop.MaCayTrong}>
-                    🌱 {crop.TenCayTrong} ({crop.LoaiCay} • Chu kỳ thu hoạch: {crop.ThoiGianThuHoach} ngày)
-                  </option>
-                ))
-              ) : (
-                farm.specialties.map((spec, i) => (
-                  <option key={i} value={spec}>
-                    🌱 {spec}
-                  </option>
-                ))
-              )}
-            </select>
-          </div>
-
-          <div>
-            <label className="block font-semibold text-gray-700 mb-1">
-              Thời hạn hợp đồng thuê đất *
-            </label>
-            <div className="grid grid-cols-3 gap-2">
-              {[3, 6, 12].map((months) => (
-                <button
-                  key={months}
-                  type="button"
-                  onClick={() => setDurationMonths(months)}
-                  className={`p-2 rounded-lg border text-center font-semibold cursor-pointer transition ${
-                    durationMonths === months
-                      ? "border-emerald-600 bg-emerald-50 text-emerald-900"
-                      : "border-gray-200 text-gray-700 hover:bg-gray-50"
-                  }`}
-                >
-                  {months} Tháng
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="p-3 rounded-xl bg-gray-50 border border-gray-200 space-y-1.5 text-2xs text-gray-600">
-            <div className="flex justify-between">
-              <span>Đơn giá thuê hàng tháng:</span>
-              <strong className="text-gray-900">
-                {(rentingPlot?.rentalPricePerMonth || 2500000).toLocaleString()} đ/tháng
-              </strong>
-            </div>
-            <div className="flex justify-between">
-              <span>Tổng chi phí ({durationMonths} tháng):</span>
-              <strong className="text-emerald-800 font-bold text-xs">
-                {((rentingPlot?.rentalPricePerMonth || 2500000) * durationMonths).toLocaleString()} đ
-              </strong>
-            </div>
-            <div className="flex justify-between text-2xs text-gray-400">
-              <span>Tiền đặt cọc giữ thửa:</span>
-              <span>{((rentingPlot?.rentalPricePerMonth || 2500000) * 2).toLocaleString()} đ</span>
-            </div>
-          </div>
-        </div>
-      </Modal>
+      {/* 6-Step Booking Wizard Modal */}
+      <BookingWizardModal
+        isOpen={isWizardOpen}
+        onClose={() => {
+          setIsWizardOpen(false);
+          setRentingPlot(null);
+        }}
+        initialFarmId={id}
+        initialPlotId={rentingPlot?.id}
+        onSuccess={handleBookingSuccess}
+      />
     </div>
   );
 }

@@ -9,6 +9,7 @@ const mockPlotRepo = {
   createPlot: jest.fn(),
   updatePlot: jest.fn(),
   updatePlotSensor: jest.fn(),
+  deletePlot: jest.fn(),
 };
 
 const mockFarmRepo = {

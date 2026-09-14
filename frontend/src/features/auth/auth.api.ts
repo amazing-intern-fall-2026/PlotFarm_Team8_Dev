@@ -15,101 +15,20 @@ const STORAGE_KEYS = {
   USER: "authUser",
 };
 
-// Predefined demo accounts for testing without seeded database
-export type DemoRoleKey = "farmer" | "farmer1" | "farmer2" | "farmer3" | "admin" | "customer";
+// Predefined accounts matching seeded database
+export type DemoRoleKey = "farmer" | "farmer1" | "farmer2" | "farmer3" | "admin" | "customer" | "customer2";
 
-export const DEMO_ACCOUNTS: Record<DemoRoleKey, User> = {
-  farmer: {
-    id: "NV0001",
-    accountId: "farmer",
-    username: "farmer",
-    email: "farmer@plotfarm.com",
-    fullName: "Lê Văn Canh Tác (Nông Dân)",
-    role: "FARMER",
-    userType: "EMPLOYEE",
-  },
-  farmer1: {
-    id: "NV0001",
-    accountId: "farmer1",
-    username: "farmer1",
-    email: "farmer@plotfarm.com",
-    fullName: "Lê Văn Canh Tác (Lâm Đồng & Bảo Lộc)",
-    role: "FARMER",
-    userType: "EMPLOYEE",
-  },
-  farmer2: {
-    id: "NV0002",
-    accountId: "farmer2",
-    username: "farmer2",
-    email: "farmer2@plotfarm.com",
-    fullName: "Nguyễn Thị Đồng Ruộng (Củ Chi)",
-    role: "FARMER",
-    userType: "EMPLOYEE",
-  },
-  farmer3: {
-    id: "NV0003",
-    accountId: "farmer3",
-    username: "farmer3",
-    email: "farmer3@plotfarm.com",
-    fullName: "Trần Văn Vườn (Mê Kông)",
-    role: "FARMER",
-    userType: "EMPLOYEE",
-  },
-  admin: {
-    id: "NV0010",
-    accountId: "admin",
-    username: "admin",
-    email: "admin@plotfarm.com",
-    fullName: "Trần Quản Trị (Admin Hệ Thống)",
-    role: "ADMIN",
-    userType: "EMPLOYEE",
-  },
-  customer: {
-    id: "KH0001",
-    accountId: "customer",
-    username: "customer",
-    email: "customer@plotfarm.com",
-    fullName: "Nguyễn Văn Nông (Khách Hàng)",
-    role: "CUSTOMER",
-    userType: "CUSTOMER",
-  },
+export const TEST_ACCOUNTS: Record<string, { username: string; password: string; role: string; name: string }> = {
+  admin: { username: "admin", password: "admin123", role: "ADMIN", name: "Trần Quản Trị (Admin Toàn Quyền)" },
+  farmer: { username: "farmer", password: "farmer123", role: "FARMER", name: "Lê Văn Canh Tác (Nông Dân 1)" },
+  farmer1: { username: "farmer1", password: "farmer123", role: "FARMER", name: "Lê Văn Canh Tác (Nông Dân 1)" },
+  farmer2: { username: "farmer2", password: "farmer123", role: "FARMER", name: "Nguyễn Thị Đồng Ruộng (Nông Dân 2)" },
+  farmer3: { username: "farmer3", password: "farmer123", role: "FARMER", name: "Trần Văn Vườn (Nông Dân 3)" },
+  customer: { username: "customer", password: "customer123", role: "CUSTOMER", name: "Nguyễn Văn Nông (Có hợp đồng)" },
+  customer2: { username: "customer2", password: "customer123", role: "CUSTOMER", name: "Trần Thị Mai (Mới, sẵn sàng thuê)" },
 };
 
-/**
- * 1-Click login with predefined demo role or specific farmer
- */
-export function loginWithDemoRole(role: DemoRoleKey): AuthResponse {
-  const demoUser = DEMO_ACCOUNTS[role] || DEMO_ACCOUNTS.farmer;
-  const authResponse: AuthResponse = {
-    accessToken: `mock-jwt-token-${demoUser.role.toLowerCase()}-${Date.now()}`,
-    user: demoUser,
-  };
-  saveAuthSession(authResponse);
-  return authResponse;
-}
-
-/**
- * Check if a username or email corresponds to a demo account
- */
-function findMatchingDemoAccount(usernameOrEmail: string): User | null {
-  const lower = usernameOrEmail.trim().toLowerCase();
-  if (lower === "farmer3" || lower.startsWith("farmer3@") || lower.includes("farmer3") || lower.includes("vuon")) {
-    return DEMO_ACCOUNTS.farmer3;
-  }
-  if (lower === "farmer2" || lower.startsWith("farmer2@") || lower.includes("farmer2") || lower.includes("ruong")) {
-    return DEMO_ACCOUNTS.farmer2;
-  }
-  if (lower === "farmer" || lower === "farmer1" || lower.startsWith("farmer@") || lower.includes("farmer")) {
-    return DEMO_ACCOUNTS.farmer;
-  }
-  if (lower === "admin" || lower.startsWith("admin@") || lower.includes("admin")) {
-    return DEMO_ACCOUNTS.admin;
-  }
-  if (lower === "customer" || lower.startsWith("customer@") || lower.includes("customer")) {
-    return DEMO_ACCOUNTS.customer;
-  }
-  return null;
-}
+export const DEMO_ACCOUNTS = TEST_ACCOUNTS;
 
 /**
  * Extract structured BackendError from fetch Response or catch block
@@ -133,15 +52,12 @@ async function parseErrorResponse(response: Response): Promise<BackendError> {
 }
 
 /**
- * Handle Login request directly with Backend API, with seamless Demo Fallback
+ * Handle Login request directly with Backend API
  */
 export async function login(credentials: LoginRequest): Promise<AuthResponse> {
   const trimmedUsername = credentials.username.trim();
-  const matchedDemo = findMatchingDemoAccount(trimmedUsername);
 
-  let response: Response | null = null;
-  let networkFailed = false;
-
+  let response: Response;
   try {
     response = await fetch(`${API_URL}/auth/login`, {
       method: "POST",
@@ -154,20 +70,6 @@ export async function login(credentials: LoginRequest): Promise<AuthResponse> {
       }),
     });
   } catch {
-    networkFailed = true;
-  }
-
-  // If network failed or backend 401 and this is a demo account, use demo mock session!
-  if ((networkFailed || (response && response.status === 401)) && matchedDemo) {
-    const mockAuth: AuthResponse = {
-      accessToken: `mock-jwt-token-${matchedDemo.role.toLowerCase()}-${Date.now()}`,
-      user: matchedDemo,
-    };
-    saveAuthSession(mockAuth);
-    return mockAuth;
-  }
-
-  if (networkFailed) {
     throw {
       status: 0,
       message: "Không thể kết nối đến máy chủ Backend. Vui lòng kiểm tra lại dịch vụ Backend đang chạy tại cổng 3000.",
@@ -175,15 +77,15 @@ export async function login(credentials: LoginRequest): Promise<AuthResponse> {
     } as BackendError;
   }
 
-  if (!response || !response.ok) {
-    const errorData = response ? await parseErrorResponse(response) : { message: "Lỗi kết nối", status: 500 };
+  if (!response.ok) {
+    const errorData = await parseErrorResponse(response);
     throw errorData;
   }
 
   const result = (await response.json()) as ApiResponse<AuthResponse>;
   const authData = result.data;
 
-  // Save token and user details to localStorage
+  // Save real JWT token and user details to localStorage
   saveAuthSession(authData);
   return authData;
 }

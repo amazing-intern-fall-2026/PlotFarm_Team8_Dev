@@ -105,6 +105,11 @@ export const getAllContracts = async (filters = {}) => {
         request.input('farmId', sql.VarChar, filters.farmId);
         conditions.push('OD.MaNongTrai = @farmId');
     }
+    if (filters.customerId) {
+        request.input('customerId', sql.VarChar, filters.customerId);
+        conditions.push('HD.MaKH = @customerId');
+    }
+
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 

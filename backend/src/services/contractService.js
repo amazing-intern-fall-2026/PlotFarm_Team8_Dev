@@ -82,6 +82,7 @@ export const getAllContracts = async (user, query = {}) => {
     const filters = {};
     if (query.trangThai || query.status) filters.trangThai = query.trangThai || query.status;
     if (query.farmId || query.MaNongTrai) filters.farmId = query.farmId || query.MaNongTrai;
+    if (query.customerId || query.MaKH) filters.customerId = query.customerId || query.MaKH;
     
     // Farmer only sees contracts on their assigned farms
     if (user.role === 'FARMER') {

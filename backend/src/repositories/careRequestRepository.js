@@ -13,14 +13,17 @@ const BASE_SELECT = `
         NT.MaNongTrai,
         NT.TenNongTrai,
         NT.MaChuNongTrai,
+        LTRIM(RTRIM(NV_FARMER.Ho + ' ' + NV_FARMER.Ten)) AS TenNongDanPhuTrach,
         NV.Ho + ' ' + NV.Ten AS TenNguoiXuLy
     FROM dbo.YEUCAUCHAMSOC YC
-    LEFT JOIN dbo.KHACHHANG   KH ON YC.MaKH      = KH.MaKH
-    LEFT JOIN dbo.HOPDONGTHUE HD ON YC.MaHopDong  = HD.MaHopDong
-    LEFT JOIN dbo.ODAT        OD ON HD.MaODat     = OD.MaODat
-    LEFT JOIN dbo.NONGTRAI    NT ON OD.MaNongTrai = NT.MaNongTrai
-    LEFT JOIN dbo.NHANVIEN    NV ON YC.NguoiXuLy  = NV.MaNV
+    LEFT JOIN dbo.KHACHHANG   KH ON YC.MaKH          = KH.MaKH
+    LEFT JOIN dbo.HOPDONGTHUE HD ON YC.MaHopDong      = HD.MaHopDong
+    LEFT JOIN dbo.ODAT        OD ON HD.MaODat         = OD.MaODat
+    LEFT JOIN dbo.NONGTRAI    NT ON OD.MaNongTrai     = NT.MaNongTrai
+    LEFT JOIN dbo.NHANVIEN    NV_FARMER ON NT.MaChuNongTrai = NV_FARMER.MaNV
+    LEFT JOIN dbo.NHANVIEN    NV ON YC.NguoiXuLy      = NV.MaNV
 `;
+
 
 export const getCareRequests = async (filters = {}) => {
     const pool = getPool();
