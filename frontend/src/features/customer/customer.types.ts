@@ -62,3 +62,12 @@ export type {
   SharedHarvestItem,
   SharedPlotItem,
 };
+
+/**
+ * Loại bỏ dấu '#' khỏi mã để hiển thị giao diện đồng bộ, sạch sẽ
+ * Ví dụ: '#PL-0192' -> 'PL-0192', '#REQ-102' -> 'REQ-102'
+ */
+export function cleanCode(code: string | number | undefined | null): string {
+  if (code === undefined || code === null) return "";
+  return String(code).replace(/#/g, "").trim();
+}

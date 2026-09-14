@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import { customerService } from "./customer.service";
-import type {
-  CareRequestStatus,
-  SharedCareRequestItem,
-  SharedPlotItem,
+import {
+  cleanCode,
+  type CareRequestStatus,
+  type SharedCareRequestItem,
+  type SharedPlotItem,
 } from "./customer.types";
 import { Alert, Badge, Button, Modal } from "../../components/ui";
 
@@ -96,7 +97,7 @@ export default function CustomerRequests({
     setRequests((prev) => [newReq, ...prev]);
     setIsCreateModalOpen(false);
     setSuccessMessage(
-      `Yêu cầu #${newReq.id} đã được gửi trực tiếp đến Nông dân phụ trách thửa ${newReq.plot}!`,
+      `Yêu cầu ${cleanCode(newReq.id)} đã được gửi trực tiếp đến Nông dân phụ trách thửa ${cleanCode(newReq.plot)}!`,
     );
     setTimeout(() => setSuccessMessage(""), 5000);
   }
@@ -229,10 +230,10 @@ export default function CustomerRequests({
               filteredRequests.map((req) => (
                 <tr key={req.id} className="hover:bg-gray-50/70 transition">
                   <td className="py-3.5 px-3.5 font-mono font-bold text-gray-900 whitespace-nowrap">
-                    #{req.id}
+                    {cleanCode(req.id)}
                   </td>
                   <td className="py-3.5 px-3 font-mono font-bold text-emerald-800 whitespace-nowrap">
-                    {req.plot}
+                    {cleanCode(req.plot)}
                   </td>
                   <td className="py-3.5 px-3 font-semibold text-purple-800 whitespace-nowrap">
                     {req.requestType}
@@ -339,7 +340,7 @@ export default function CustomerRequests({
             >
               {plots.map((p) => (
                 <option key={p.id} value={p.plotCode}>
-                  {p.plotCode} - {p.plantCrop} ({p.farmName})
+                  {cleanCode(p.plotCode)} - {p.plantCrop} ({p.farmName})
                 </option>
               ))}
             </select>

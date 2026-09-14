@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
 import { customerService } from "./customer.service";
-import type {
-  DeliveryStatus,
-  HarvestStatus,
-  PackageStatus,
-  SharedHarvestItem,
+import {
+  cleanCode,
+  type DeliveryStatus,
+  type HarvestStatus,
+  type PackageStatus,
+  type SharedHarvestItem,
 } from "./customer.types";
 import { Badge, Card, StatCard } from "../../components/ui";
 
@@ -144,10 +145,10 @@ export default function CustomerHarvest() {
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-3">
                 <div className="flex items-center gap-2.5">
                   <span className="font-mono text-sm font-bold text-gray-900 bg-gray-100 px-2.5 py-0.5 rounded">
-                    #{h.id}
+                    {cleanCode(h.id)}
                   </span>
                   <span className="font-mono text-sm font-bold text-emerald-800">
-                    {h.plot}
+                    {cleanCode(h.plot)}
                   </span>
                   <span className="text-gray-300">•</span>
                   <span className="text-base font-bold text-gray-900">

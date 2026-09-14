@@ -156,38 +156,41 @@ export default function CustomerLayout() {
               <button
                 type="button"
                 onClick={() => handleQuickSwitchCustomer("KH0001")}
-                className={`px-2 py-0.5 rounded text-2xs font-semibold cursor-pointer transition ${
+                className={`flex items-center gap-1 px-2 py-0.5 rounded text-2xs font-semibold cursor-pointer transition ${
                   activeCustomer.id === "KH0001"
                     ? "bg-emerald-700 text-white shadow-xs"
                     : "text-gray-700 hover:bg-emerald-100"
                 }`}
-                title="Nguyễn Văn Nông (Thửa #PL-0192 Lúa ST25)"
+                title="Nguyễn Văn Nông (Thửa PL-0192 Lúa ST25)"
               >
-                👨‍💼 Nông (#0192)
+                <span>👨‍💼 Nông</span>
+                <span className={`font-mono font-bold px-1 rounded ${activeCustomer.id === "KH0001" ? "bg-emerald-600 text-emerald-100" : "bg-gray-100 text-gray-600"}`}>0192</span>
               </button>
               <button
                 type="button"
                 onClick={() => handleQuickSwitchCustomer("KH0002")}
-                className={`px-2 py-0.5 rounded text-2xs font-semibold cursor-pointer transition ${
+                className={`flex items-center gap-1 px-2 py-0.5 rounded text-2xs font-semibold cursor-pointer transition ${
                   activeCustomer.id === "KH0002"
                     ? "bg-emerald-700 text-white shadow-xs"
                     : "text-gray-700 hover:bg-emerald-100"
                 }`}
-                title="Trần Thị Mai (Thửa #PL-0205 Cà chua bi)"
+                title="Trần Thị Mai (Thửa PL-0205 Cà chua bi)"
               >
-                👩‍💼 Mai (#0205)
+                <span>👩‍💼 Mai</span>
+                <span className={`font-mono font-bold px-1 rounded ${activeCustomer.id === "KH0002" ? "bg-emerald-600 text-emerald-100" : "bg-gray-100 text-gray-600"}`}>0205</span>
               </button>
               <button
                 type="button"
                 onClick={() => handleQuickSwitchCustomer("KH0003")}
-                className={`px-2 py-0.5 rounded text-2xs font-semibold cursor-pointer transition ${
+                className={`flex items-center gap-1 px-2 py-0.5 rounded text-2xs font-semibold cursor-pointer transition ${
                   activeCustomer.id === "KH0003"
                     ? "bg-emerald-700 text-white shadow-xs"
                     : "text-gray-700 hover:bg-emerald-100"
                 }`}
-                title="Hoàng Minh Tuấn (Thửa #PL-0311 Dưa lưới)"
+                title="Hoàng Minh Tuấn (Thửa PL-0311 Dưa lưới)"
               >
-                🧑‍💻 Tuấn (#0311)
+                <span>🧑‍💻 Tuấn</span>
+                <span className={`font-mono font-bold px-1 rounded ${activeCustomer.id === "KH0003" ? "bg-emerald-600 text-emerald-100" : "bg-gray-100 text-gray-600"}`}>0311</span>
               </button>
             </div>
 

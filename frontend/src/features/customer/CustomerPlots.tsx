@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { customerService } from "./customer.service";
-import type {
-  SharedFarmingLogItem,
-  SharedPlotItem,
+import {
+  cleanCode,
+  type SharedFarmingLogItem,
+  type SharedPlotItem,
 } from "./customer.types";
 import { Badge, Button, Card, Modal } from "../../components/ui";
 
@@ -134,7 +135,7 @@ export default function CustomerPlots({
                   >
                     <div className="flex items-center justify-between">
                       <span className="font-mono font-bold text-sm text-emerald-800">
-                        {plot.plotCode}
+                        {cleanCode(plot.plotCode)}
                       </span>
                       {getGrowthBadge(plot.plantStatus)}
                     </div>
@@ -172,10 +173,10 @@ export default function CustomerPlots({
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="font-mono text-base font-bold text-emerald-900 bg-emerald-100 px-2.5 py-0.5 rounded-md">
-                        {selectedPlot.plotCode}
+                        {cleanCode(selectedPlot.plotCode)}
                       </span>
                       <span className="text-xs font-semibold text-gray-500">
-                        Hợp đồng: <strong>{selectedPlot.contractId}</strong>
+                        Hợp đồng: <strong>{cleanCode(selectedPlot.contractId)}</strong>
                       </span>
                     </div>
                     <h1 className="text-xl font-bold text-gray-900 mt-2">
@@ -318,7 +319,7 @@ export default function CustomerPlots({
                   <div className="flex items-center gap-2">
                     <span className="text-base">📋</span>
                     <h3 className="text-base font-bold text-gray-900">
-                      Nhật Ký Canh Tác Thửa {selectedPlot.plotCode} ({plotLogs.length})
+                      Nhật Ký Canh Tác Thửa {cleanCode(selectedPlot.plotCode)} ({plotLogs.length})
                     </h3>
                   </div>
                   <span className="text-xs text-gray-400">Ghi chép bởi Nông dân</span>
@@ -402,7 +403,7 @@ export default function CustomerPlots({
             {/* Live Indicator Overlay */}
             <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-black/60 backdrop-blur-xs text-white px-2.5 py-1 rounded-full text-2xs font-semibold">
               <span className="h-2 w-2 rounded-full bg-red-500 animate-ping" />
-              <span>LIVE CAM • TRẠM #{selectedPlot?.plotCode.replace("#", "")}</span>
+              <span>LIVE CAM • TRẠM {cleanCode(selectedPlot?.plotCode)}</span>
             </div>
             <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-xs text-white px-3 py-1 rounded-md text-2xs font-mono">
               {selectedPlot?.farmName} • {new Date().toLocaleDateString("vi-VN")}
