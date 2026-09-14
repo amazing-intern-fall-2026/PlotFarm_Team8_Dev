@@ -65,7 +65,7 @@ export default function LoginForm({
       const auth = loginWithDemoRole(role);
       setAuthContext(auth.accessToken, auth.user);
       const targetPath = onSuccessRedirect || getRedirectPathByRole(auth.user?.role);
-      navigate(targetPath, { replace: true });
+      navigate(targetPath);
     } finally {
       setLoading(false);
     }
@@ -103,7 +103,7 @@ export default function LoginForm({
       // Redirect based on user role returned from backend
       const targetPath =
         onSuccessRedirect || getRedirectPathByRole(response.user?.role);
-      navigate(targetPath, { replace: true });
+      navigate(targetPath);
     } catch (err: unknown) {
       const backendErr = err as BackendError;
       const status = backendErr?.status;

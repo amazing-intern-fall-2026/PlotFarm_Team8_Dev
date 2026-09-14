@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import LoginForm from "../components/LoginForm";
 import RegisterForm from "../components/RegisterForm";
@@ -21,6 +22,13 @@ export default function AuthPage({ initialMode }: AuthPageProps) {
   const isForgotRoute = location.pathname.includes("forgot-password");
   const mode: "login" | "register" | "forgot-password" =
     initialMode || (isForgotRoute ? "forgot-password" : isRegisterRoute ? "register" : "login");
+
+  // Nếu user đã đăng nhập mà bấm Back về /login → tự redirect về portal của họ
+  useEffect(() => {
+    if (currentUser && mode === "login") {
+      navigate(getRedirectPathByRole(currentUser.role), { replace: true });
+    }
+  }, [currentUser, mode, navigate]);
 
   function handleSwitchMode(newMode: "login" | "register" | "forgot-password") {
     if (newMode === "register") navigate("/register");
