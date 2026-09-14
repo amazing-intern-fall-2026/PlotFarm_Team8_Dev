@@ -7,7 +7,6 @@ import {
   FarmerProfileHeader,
   FarmerProfileForm,
   FarmerAssignedFarmsList,
-  FarmerMockAccountSwitcher,
 } from "./components";
 
 export default function FarmerProfile() {
@@ -70,14 +69,6 @@ export default function FarmerProfile() {
     }
   }
 
-  function handleFarmerSwitched(newProfile: FarmerProfileData) {
-    setProfile(newProfile);
-    setPlots(farmerService.getPlots(newProfile.id));
-    setIsEditing(false);
-    setSuccessMessage(`Đã chuyển sang tài khoản Nông Dân: ${newProfile.name} (${newProfile.id}) thành công!`);
-    setTimeout(() => setSuccessMessage(""), 3500);
-  }
-
   return (
     <div className="space-y-6 max-w-5xl">
       {/* Header */}
@@ -137,12 +128,6 @@ export default function FarmerProfile() {
           </Card>
         </div>
       </div>
-
-      {/* Interactive Mock Account Switcher for Testing */}
-      <FarmerMockAccountSwitcher
-        currentFarmerId={profile.id}
-        onFarmerSwitched={handleFarmerSwitched}
-      />
     </div>
   );
 }

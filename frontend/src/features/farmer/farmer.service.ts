@@ -15,7 +15,7 @@ import type {
   HarvestItem,
   PlantGrowthStage,
 } from "./farmer.types";
-import { getCurrentUser, saveAuthSession, DEMO_ACCOUNTS, type DemoRoleKey } from "../auth/auth.api";
+import { getCurrentUser } from "../auth/auth.api";
 
 const STORAGE_KEYS = {
   PLOTS: "pf_farmer_plots",
@@ -258,39 +258,4 @@ export const farmerService = {
     setStoredData(STORAGE_KEYS.PROFILES, profiles);
     return updated;
   },
-
-  // Switch demo farmer for instant UI testing
-  switchActiveFarmer(targetFarmerId: "NV0001" | "NV0002" | "NV0003"): FarmerProfileData {
-    const roleKeyMap: Record<string, DemoRoleKey> = {
-      NV0001: "farmer1",
-      NV0002: "farmer2",
-      NV0003: "farmer3",
-    };
-    const demoUser = DEMO_ACCOUNTS[roleKeyMap[targetFarmerId]] || DEMO_ACCOUNTS.farmer;
-    saveAuthSession({
-      accessToken: `mock-jwt-token-farmer-${Date.now()}`,
-      user: demoUser,
-    });
-
-    const profile = this.getFarmerProfile(targetFarmerId);
-    // Dispatch custom browser event to notify all active views to re-read service data
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent("pf_farmer_changed", { detail: { farmerId: targetFarmerId } }));
-    }
-    return profile;
-  },
-
-  getAvailableDemoFarmers(): FarmerProfileData[] {
-    const profiles = this.getAllProfiles();
-    return Object.keys(MOCK_FARMER_PROFILES).map((id) => {
-      const p = profiles[id] || MOCK_FARMER_PROFILES[id];
-      const plots = this.getPlots(id);
-      return {
-        ...p,
-        assignedFarms: Array.from(new Set(plots.map((x) => x.farmName))),
-        assignedPlotCount: plots.length,
-      };
-    });
-  },
 };
-

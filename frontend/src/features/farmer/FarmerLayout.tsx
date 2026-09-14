@@ -63,10 +63,6 @@ export default function FarmerLayout() {
     navigate("/login", { replace: true });
   }
 
-  function handleQuickSwitchFarmer(id: "NV0001" | "NV0002" | "NV0003") {
-    farmerService.switchActiveFarmer(id);
-  }
-
   // Real-time badge counts from farmerService scoped to active farmer
   const plotsCount = farmerService.getPlots(activeProfile.id).length;
   const pendingRequestsCount = farmerService
@@ -137,50 +133,8 @@ export default function FarmerLayout() {
             </p>
           </div>
 
-          {/* Quick Demo Farmer Switcher in Header for effortless testing */}
+          {/* Header Actions */}
           <div className="flex flex-wrap items-center gap-2 text-xs">
-            <div className="flex items-center gap-1 bg-emerald-50/90 border border-emerald-200 px-2 py-1 rounded-lg">
-              <span className="text-2xs font-bold uppercase text-emerald-900 mr-1 flex items-center gap-1">
-                <span>🧪</span>
-                <span className="hidden md:inline">Test Nông Dân:</span>
-              </span>
-              <button
-                type="button"
-                onClick={() => handleQuickSwitchFarmer("NV0001")}
-                className={`px-2 py-0.5 rounded text-2xs font-semibold cursor-pointer transition ${
-                  activeProfile.id === "NV0001"
-                    ? "bg-emerald-700 text-white shadow-xs"
-                    : "text-gray-700 hover:bg-emerald-100"
-                }`}
-                title="Lê Văn Canh Tác (Lâm Đồng & Bảo Lộc)"
-              >
-                👨‍🌾 Farmer 1
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickSwitchFarmer("NV0002")}
-                className={`px-2 py-0.5 rounded text-2xs font-semibold cursor-pointer transition ${
-                  activeProfile.id === "NV0002"
-                    ? "bg-emerald-700 text-white shadow-xs"
-                    : "text-gray-700 hover:bg-emerald-100"
-                }`}
-                title="Nguyễn Thị Đồng Ruộng (Củ Chi)"
-              >
-                👩‍🌾 Farmer 2
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickSwitchFarmer("NV0003")}
-                className={`px-2 py-0.5 rounded text-2xs font-semibold cursor-pointer transition ${
-                  activeProfile.id === "NV0003"
-                    ? "bg-emerald-700 text-white shadow-xs"
-                    : "text-gray-700 hover:bg-emerald-100"
-                }`}
-                title="Trần Văn Vườn (Mê Kông)"
-              >
-                🧑‍🌾 Farmer 3
-              </button>
-            </div>
 
             <button
               type="button"
