@@ -113,8 +113,8 @@ export default function CustomerLayout() {
         isOpenMobile={isMobileSidebarOpen}
         onToggleMobile={setIsMobileSidebarOpen}
         user={{
-          name: activeCustomer.name || user?.fullName || "Khách Hàng",
-          emailOrStatus: activeCustomer.email || "customer@plotfarm.com",
+          name: user?.fullName || activeCustomer.name || "Khách Hàng",
+          emailOrStatus: user?.email || activeCustomer.email || "",
           avatarText: activeCustomer.avatarIcon || "👨‍💼",
         }}
         extraFooterWidget={

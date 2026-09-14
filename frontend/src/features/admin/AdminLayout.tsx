@@ -89,7 +89,7 @@ export default function AdminLayout() {
         onToggleMobile={setIsMobileSidebarOpen}
         user={{
           name: user?.fullName || user?.username || "Admin",
-          emailOrStatus: user?.email || "admin@plotfarm.com",
+          emailOrStatus: user?.email || "",
           avatarText: "AD",
         }}
         extraFooterWidget={

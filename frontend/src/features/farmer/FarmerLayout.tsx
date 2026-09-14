@@ -106,8 +106,8 @@ export default function FarmerLayout() {
         isOpenMobile={isMobileSidebarOpen}
         onToggleMobile={setIsMobileSidebarOpen}
         user={{
-          name: activeProfile.name || user?.fullName || "Nông Dân",
-          emailOrStatus: `${activeProfile.assignedFarms[0] || "Trực đồng ruộng"}`,
+          name: user?.fullName || activeProfile.name || "Nông Dân",
+          emailOrStatus: user?.email || `${activeProfile.assignedFarms[0] || "Trực đồng ruộng"}`,
           avatarText: activeProfile.avatarIcon || "👨‍🌾",
         }}
         extraFooterWidget={

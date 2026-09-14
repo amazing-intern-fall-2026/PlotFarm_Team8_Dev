@@ -103,7 +103,7 @@ export default function FarmDetailPage() {
         portalBadge="Customer Portal"
         user={{
           name: user?.fullName || user?.username || "Khách hàng",
-          email: user?.email || "customer@plotfarm.com",
+          email: user?.email || "",
           avatarText: (user?.fullName || user?.username || "C").charAt(0),
         }}
         onLogout={handleLogout}

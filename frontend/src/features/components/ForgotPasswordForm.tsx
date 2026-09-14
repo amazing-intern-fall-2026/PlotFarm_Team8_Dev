@@ -166,7 +166,7 @@ export default function ForgotPasswordForm({
           <Input
             label="Email hoặc Tên tài khoản"
             type="text"
-            placeholder="Ví dụ: farmer@plotfarm.com hoặc farmer1"
+            placeholder="Nhập email hoặc tên đăng nhập"
             value={identifier}
             disabled={loading}
             error={fieldErrors.identifier}
