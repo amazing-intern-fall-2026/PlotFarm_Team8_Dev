@@ -20,7 +20,7 @@ import type {
   CustomerKPISummary,
   RentPlotPayload,
 } from "./customer.types";
-import { getCurrentUser, saveAuthSession } from "../auth/auth.api";
+import { getCurrentUser } from "../auth/auth.api";
 
 const STORAGE_KEYS = {
   PLOTS: "pf_farmer_plots",
@@ -63,19 +63,15 @@ export const customerService = {
   // 1. Determine active customer ID from user session or default
   getActiveCustomerId(): string {
     const user = getCurrentUser();
-    if (user?.id && (user.id === "KH0001" || user.id === "KH0002" || user.id === "KH0003")) {
+    if (!user) return "KH0001";
+
+    // Chỉ map sang demo ID nếu user.id khớp chính xác với demo ID
+    if (user.id === "KH0001" || user.id === "KH0002" || user.id === "KH0003") {
       return user.id;
     }
-    const username = (user?.username || "").toLowerCase();
-    if (username.includes("customer3") || username.includes("tuan")) return "KH0003";
-    if (username.includes("customer2") || username.includes("mai")) return "KH0002";
-    if (username === "customer" || username.includes("nong")) return "KH0001";
-    
-    // Nếu là tài khoản khách hàng mới đăng ký thực sự (có ID hoặc username riêng)
-    if (user?.username) {
-      return `USER_${user.username}`;
-    }
-    return "KH0001"; // Fallback mặc định
+
+    // Tất cả tài khoản khác (đăng ký thật từ backend) → dùng USER_<username>
+    return `USER_${user.username}`;
   },
 
   getAllCustomerProfiles(): Record<string, SharedCustomerProfile> {
@@ -108,33 +104,6 @@ export const customerService = {
     }
 
     return DEMO_CUSTOMERS.KH0001;
-  },
-
-  getAvailableDemoCustomers(): SharedCustomerProfile[] {
-    const profiles = this.getAllCustomerProfiles();
-    return Object.values(profiles);
-  },
-
-  switchActiveCustomer(id: string): SharedCustomerProfile {
-    const profiles = this.getAllCustomerProfiles();
-    const target = profiles[id] || DEMO_CUSTOMERS.KH0001;
-
-    // Update authUser session in auth.api to seamlessly match
-    saveAuthSession({
-      accessToken: `mock-jwt-token-customer-${Date.now()}`,
-      user: {
-        id: target.id,
-        accountId: target.username,
-        username: target.username,
-        email: target.email,
-        fullName: `${target.name} (Khách Hàng)`,
-        role: "CUSTOMER",
-        userType: "CUSTOMER",
-      },
-    });
-
-    notifyDataChanged("customer_switched", { customerId: target.id });
-    return target;
   },
 
   // 2. Plots owned / rented by Customer
