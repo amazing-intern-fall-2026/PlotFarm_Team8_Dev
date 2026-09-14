@@ -9,6 +9,7 @@ import {
   type SharedPlotItem,
 } from "./customer.types";
 import { Badge, Button, Card, StatCard } from "../../components/ui";
+import { getCurrentUser } from "../auth/auth.api";
 
 interface CustomerDashboardProps {
   onNavigateTab: (tab: CustomerTab) => void;
@@ -89,7 +90,7 @@ export default function CustomerDashboard({
             <span>🌱</span> Cổng Giám Sát Nông Trại Trực Tuyến
           </span>
           <h1 className="text-2xl font-bold sm:text-3xl tracking-tight">
-            Xin chào, {activeCustomer.name}!
+            Xin chào, {getCurrentUser()?.fullName || activeCustomer.name}!
           </h1>
           <p className="mt-2 text-sm text-emerald-100/90 leading-relaxed">
             Hệ thống đang đồng bộ dữ liệu thời gian thực với Nông dân phụ trách tại các trang trại. Bạn có thể theo dõi cảm biến IoT đất, xem hình ảnh nhật ký thực địa và gửi yêu cầu chăm sóc trực tiếp đến nông dân.
