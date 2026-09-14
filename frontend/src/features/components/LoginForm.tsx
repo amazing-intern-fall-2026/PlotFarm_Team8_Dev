@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { getRedirectPathByRole, login, loginWithDemoRole } from "../auth/auth.api";
+import { useAuth } from "../auth/AuthContext";
 import type { BackendError, LoginRequest } from "../auth/auth.types";
 import {
   formatBackendErrorMessage,
@@ -21,6 +22,7 @@ export default function LoginForm({
   onSuccessRedirect,
 }: LoginFormProps) {
   const navigate = useNavigate();
+  const { login: setAuthContext } = useAuth();
 
   const [form, setForm] = useState<LoginRequest>({
     username: "",
@@ -59,6 +61,7 @@ export default function LoginForm({
     try {
       setLoading(true);
       const auth = loginWithDemoRole(role);
+      setAuthContext(auth.accessToken, auth.user);
       const targetPath = onSuccessRedirect || getRedirectPathByRole(auth.user?.role);
       navigate(targetPath, { replace: true });
     } finally {
@@ -93,6 +96,7 @@ export default function LoginForm({
 
       // Call real backend API (falls back to mock if backend 401/offline and demo username is used)
       const response = await login(form);
+      setAuthContext(response.accessToken, response.user);
 
       // Redirect based on user role returned from backend
       const targetPath =

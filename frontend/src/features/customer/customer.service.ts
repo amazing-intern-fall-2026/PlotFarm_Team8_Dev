@@ -80,9 +80,38 @@ export const customerService = {
   },
 
   getActiveCustomerProfile(customerId?: string): SharedCustomerProfile {
+    const user = getCurrentUser();
     const id = customerId || this.getActiveCustomerId();
     const profiles = this.getAllCustomerProfiles();
-    return profiles[id] || DEMO_CUSTOMERS.KH0001;
+    const existing = profiles[id];
+
+    if (existing) {
+      const isMatching =
+        user &&
+        (user.id === existing.id ||
+          user.username === existing.username ||
+          (user.role && user.role.toString().toUpperCase().includes("CUSTOMER")));
+      return {
+        ...existing,
+        name: isMatching && user?.fullName ? user.fullName : existing.name,
+        email: isMatching && user?.email ? user.email : existing.email,
+      };
+    }
+
+    if (user) {
+      return {
+        id: String(user.id || id),
+        username: user.username,
+        name: user.fullName || user.username,
+        email: user.email,
+        phone: (user as unknown as { phone?: string }).phone || "",
+        shippingAddress: (user as unknown as { shippingAddress?: string }).shippingAddress || "",
+        ownedPlotCodes: [],
+        avatarIcon: "👤",
+      };
+    }
+
+    return DEMO_CUSTOMERS.KH0001;
   },
 
   getAvailableDemoCustomers(): SharedCustomerProfile[] {

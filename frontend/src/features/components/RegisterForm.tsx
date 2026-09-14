@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { getRedirectPathByRole, login, register } from "../auth/auth.api";
+import { useAuth } from "../auth/AuthContext";
 import type { BackendError, RegisterRequest } from "../auth/auth.types";
 import {
   formatBackendErrorMessage,
@@ -21,6 +22,7 @@ export default function RegisterForm({
   onSuccessRedirect = "/customer",
 }: RegisterFormProps) {
   const navigate = useNavigate();
+  const { login: setAuthContext } = useAuth();
 
   const [form, setForm] = useState<RegisterRequest>({
     fullName: "",
@@ -89,6 +91,7 @@ export default function RegisterForm({
           username: form.username.trim(),
           password: form.password,
         });
+        setAuthContext(loginRes.accessToken, loginRes.user);
 
         const targetPath =
           onSuccessRedirect || getRedirectPathByRole(loginRes.user?.role);

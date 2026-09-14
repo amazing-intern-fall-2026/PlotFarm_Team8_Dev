@@ -1,12 +1,7 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
-
-interface User {
-  id: string;
-  username: string;
-  email?: string;
-  fullName?: string;
-  role: "admin" | "farmer" | "customer";
-}
+/* eslint-disable react-refresh/only-export-components */
+import React, { createContext, useContext, useState } from "react";
+import type { User } from "./auth.types";
+import { getCurrentUser, getAccessToken, saveAuthSession, logout as apiLogout } from "./auth.api";
 
 interface AuthContextType {
   user: User | null;
@@ -21,38 +16,43 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(localStorage.getItem("token"));
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    // Kiểm tra token và khôi phục thông tin user từ localStorage khi tải lại trang
-    const savedToken = localStorage.getItem("token");
-    const savedUser = localStorage.getItem("user");
-
-    if (savedToken && savedUser) {
-      setToken(savedToken);
-      try {
-        setUser(JSON.parse(savedUser));
-      } catch (e) {
-        console.error("Lỗi parse user từ localStorage", e);
-      }
+  const [user, setUser] = useState<User | null>(() => {
+    const current = getCurrentUser();
+    if (current) return current;
+    try {
+      const legacy = localStorage.getItem("user");
+      return legacy ? JSON.parse(legacy) : null;
+    } catch {
+      return null;
     }
-    setIsLoading(false);
-  }, []);
+  });
+
+  const [token, setToken] = useState<string | null>(() => {
+    return getAccessToken() || (typeof window !== "undefined" ? localStorage.getItem("token") : null);
+  });
+
+  const [isLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
   const login = (newToken: string, newUser: User) => {
     setToken(newToken);
     setUser(newUser);
+    setError(null);
+
+    // Lưu vào storage cho auth.api
+    saveAuthSession({ accessToken: newToken, user: newUser });
+    // Đồng bộ thêm khóa token/user cho tương thích ngược
     localStorage.setItem("token", newToken);
     localStorage.setItem("user", JSON.stringify(newUser));
-    setError(null);
   };
 
   const logout = () => {
     setToken(null);
     setUser(null);
+    setError(null);
+
+    // Xóa session ở cả auth.api lẫn localStorage gốc
+    apiLogout();
     localStorage.removeItem("token");
     localStorage.removeItem("user");
   };

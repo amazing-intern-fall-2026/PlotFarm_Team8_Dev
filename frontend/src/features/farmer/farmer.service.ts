@@ -228,6 +228,7 @@ export const farmerService = {
   },
 
   getFarmerProfile(farmerId?: string): FarmerProfileData {
+    const user = getCurrentUser();
     const activeFarmerId = farmerId || this.getActiveFarmerId();
     const profiles = this.getAllProfiles();
     const defaultProfile = MOCK_FARMER_PROFILES[activeFarmerId] || MOCK_FARMER_PROFILES.NV0001;
@@ -237,8 +238,19 @@ export const farmerService = {
     const plots = this.getPlots(activeFarmerId);
     const assignedFarms = Array.from(new Set(plots.map((p) => p.farmName)));
 
+    // Đồng bộ thông tin họ tên & email nếu tài khoản đang đăng nhập là Farmer
+    const isMatchingUser =
+      user &&
+      (user.id === activeFarmerId ||
+        user.username === current.username ||
+        (user.role && user.role.toString().toUpperCase().includes("FARMER")));
+    const name = isMatchingUser && user?.fullName ? user.fullName : current.name;
+    const email = isMatchingUser && user?.email ? user.email : current.email;
+
     return {
       ...current,
+      name,
+      email,
       assignedFarms: assignedFarms.length > 0 ? assignedFarms : current.assignedFarms,
       assignedPlotCount: plots.length,
     };
