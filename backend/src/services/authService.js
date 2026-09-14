@@ -6,7 +6,8 @@ import sql from 'mssql';
 import { AppError } from '../utils/AppError.js';
 import { runInTransaction } from '../utils/transactionHelper.js';
 import * as authRepo from '../repositories/authRepository.js';
-import { JWT_SECRET, JWT_EXPIRES_IN, BCRYPT_SALT_ROUNDS } from '../config/config.js';
+import * as emailService from './emailService.js';
+import { JWT_SECRET, JWT_EXPIRES_IN, BCRYPT_SALT_ROUNDS, NODE_ENV } from '../config/config.js';
 
 /** Register a new customer and linked account inside a transaction */
 export const registerUser = async (payload) => {
@@ -140,4 +141,97 @@ export const getCurrentUser = async (payload) => {
   const emp = await authRepo.getEmployeeById(userId);
   if (!emp) return null;
   return { ...emp, userType, role: payload.role };
+};
+
+/** Helper to mask email for privacy display */
+const maskEmail = (email) => {
+  if (!email || !email.includes('@')) return email;
+  const [local, domain] = email.split('@');
+  if (local.length <= 2) {
+    return `${local[0]}***@${domain}`;
+  }
+  return `${local[0]}${'*'.repeat(Math.min(local.length - 2, 5))}${local[local.length - 1]}@${domain}`;
+};
+
+/**
+ * Request password reset (Forgot password)
+ * Generates a 6-digit OTP, stores hash in DB with 15m expiry, and sends email.
+ */
+export const requestPasswordReset = async (identifier) => {
+  const accountInfo = await authRepo.findAccountWithContactByIdentifier(identifier);
+  if (!accountInfo) {
+    throw new AppError('Không tìm thấy tài khoản hoặc email trong hệ thống', 404);
+  }
+
+  if (!accountInfo.email) {
+    throw new AppError('Tài khoản này chưa được cấu hình email liên hệ', 400);
+  }
+
+  // Generate 6-digit OTP
+  const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+  const otpHash = await bcrypt.hash(otpCode, BCRYPT_SALT_ROUNDS);
+
+  // 15-minute expiration
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
+  // Store in database
+  await authRepo.createPasswordResetRecord({
+    username: accountInfo.username,
+    email: accountInfo.email,
+    otpHash,
+    expiresAt,
+  });
+
+  // Send email (falls back to console log if SMTP not set)
+  await emailService.sendPasswordResetOtpEmail(accountInfo.email, otpCode, accountInfo.username);
+
+  return {
+    username: accountInfo.username,
+    emailMasked: maskEmail(accountInfo.email),
+    expiresInMinutes: 15,
+    // Provide devOtp only in development mode to assist instant developer/tester verification
+    ...(NODE_ENV !== 'production' ? { devOtp: otpCode } : {}),
+  };
+};
+
+/**
+ * Reset password using OTP
+ */
+export const resetPassword = async ({ identifier, otp, newPassword }) => {
+  const accountInfo = await authRepo.findAccountWithContactByIdentifier(identifier);
+  if (!accountInfo) {
+    throw new AppError('Tài khoản không tồn tại', 404);
+  }
+
+  // Find latest unused, unexpired OTP record
+  const latestOtpRecord = await authRepo.findLatestValidResetOtp(accountInfo.username);
+  if (!latestOtpRecord) {
+    throw new AppError('Mã xác thực OTP không tồn tại hoặc đã hết hạn. Vui lòng yêu cầu mã mới.', 400);
+  }
+
+  // Verify OTP match
+  const isMatch = await bcrypt.compare(otp.trim(), latestOtpRecord.OtpHash);
+  if (!isMatch) {
+    throw new AppError('Mã xác thực OTP không chính xác', 400);
+  }
+
+  // Hash new password
+  const newPasswordHash = await bcrypt.hash(newPassword, BCRYPT_SALT_ROUNDS);
+
+  // Run updates inside a transaction
+  await runInTransaction(async (transaction) => {
+    // 1. Update password
+    const updated = await authRepo.updateAccountPassword(accountInfo.username, newPasswordHash, transaction);
+    if (!updated) {
+      throw new AppError('Không thể cập nhật mật khẩu. Vui lòng thử lại sau.', 500);
+    }
+
+    // 2. Invalidate OTP
+    await authRepo.markOtpAsUsed(latestOtpRecord.Id, transaction);
+  });
+
+  return {
+    message: 'Đặt lại mật khẩu thành công. Bây giờ bạn có thể đăng nhập bằng mật khẩu mới.',
+    username: accountInfo.username,
+  };
 };
