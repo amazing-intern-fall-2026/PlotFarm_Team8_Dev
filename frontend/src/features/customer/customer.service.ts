@@ -82,6 +82,7 @@ export const customerService = {
   },
 
   getActiveCustomerProfile(customerId?: string): SharedCustomerProfile {
+    const user = getCurrentUser();
     const id = customerId || this.getActiveCustomerId();
     const profiles = this.getAllCustomerProfiles();
     if (profiles[id]) {

@@ -81,6 +81,7 @@ export default function LoginForm({
 
       // Call real backend API (falls back to mock if backend 401/offline and demo username is used)
       const response = await login(form);
+      setAuthContext(response.accessToken, response.user);
 
       // Lưu hoặc xóa nhớ tên đăng nhập theo checkbox
       if (rememberMe) {

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getCurrentUser, logout } from "../auth/auth.api";
+import { useAuth } from "../auth/AuthContext";
 import {
   Sidebar,
   type SidebarMenuItem,
@@ -27,13 +28,15 @@ interface UserTableRow {
 
 export default function AdminLayout() {
   const navigate = useNavigate();
-  const [user] = useState(() => getCurrentUser());
+  const { user: authUser, logout: authLogout } = useAuth();
+  const user = authUser || getCurrentUser();
   const [activeTab, setActiveTab] = useState<AdminTab>("dashboard");
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserTableRow | null>(null);
 
   function handleLogout() {
+    authLogout();
     logout();
     navigate("/login", { replace: true });
   }

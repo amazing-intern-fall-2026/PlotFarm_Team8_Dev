@@ -91,6 +91,7 @@ export default function RegisterForm({
           username: form.username.trim(),
           password: form.password,
         });
+        setAuthContext(loginRes.accessToken, loginRes.user);
 
         // Cập nhật vào AuthContext để ProtectedRoute nhận diện ngay
         setAuthContext(loginRes.accessToken, loginRes.user as any);

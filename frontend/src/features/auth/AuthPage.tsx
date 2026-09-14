@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import LoginForm from "../components/LoginForm";
 import RegisterForm from "../components/RegisterForm";
@@ -34,16 +33,10 @@ export default function AuthPage({ initialMode }: AuthPageProps) {
   function handleLogoutCurrent() {
     authLogout();
     logout();
-    setCurrentUser(null);
   }
 
   function handleGoToRolePage() {
     if (!currentUser) return;
-
-    const existingToken = localStorage.getItem("token") || "mock-jwt-token";
-    // Ép kiểu (currentUser as any) để sửa dứt điểm lỗi TypeScript
-    setAuthContext(existingToken, currentUser as any);
-    
     navigate(getRedirectPathByRole(currentUser.role));
   }
 

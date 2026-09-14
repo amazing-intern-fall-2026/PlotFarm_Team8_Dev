@@ -5,7 +5,7 @@ import { Spinner } from "../../components/ui";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  allowedRoles?: ("admin" | "farmer" | "customer")[];
+  allowedRoles?: string[];
 }
 
 export default function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
@@ -29,9 +29,15 @@ export default function ProtectedRoute({ children, allowedRoles }: ProtectedRout
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // 3. Nếu đăng nhập rồi nhưng không đúng Role cho phép -> Chuyển về trang /login (hoặc trang chủ)
-  if (allowedRoles && !allowedRoles.includes(user.role)) {
-    return <Navigate to="/login" replace />;
+  // 3. Nếu đăng nhập rồi nhưng không đúng Role cho phép (so sánh không phân biệt hoa thường) -> Chuyển về trang /login
+  if (allowedRoles && allowedRoles.length > 0) {
+    const currentRole = (user.role || "").toLowerCase().trim();
+    const isAllowed = allowedRoles.some(
+      (role) => role.toLowerCase().trim() === currentRole,
+    );
+    if (!isAllowed) {
+      return <Navigate to="/login" replace />;
+    }
   }
 
   // Nếu hợp lệ -> Cho phép xem nội dung bên trong
