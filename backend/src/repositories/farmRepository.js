@@ -4,12 +4,45 @@ import { generateIncrementalId } from '../utils/idGenerator.js';
 
 export const getAllFarms = async (status = null) => {
   const pool = getPool();
-  let query = 'SELECT * FROM dbo.NONGTRAI';
+  let query = `
+    SELECT 
+        NT.MaNongTrai,
+        NT.TenNongTrai,
+        NT.DiaChi,
+        NT.TrangThai,
+        NT.CreatedAt,
+        NT.UpdatedAt,
+        NT.MaChuNongTrai,
+        LTRIM(RTRIM(NV.Ho + ' ' + NV.Ten)) AS TenChuNongTrai,
+        NV.Email AS EmailChuNongTrai,
+        NV.DienThoai AS DienThoaiChuNongTrai,
+        COUNT(OD.MaODat) AS SoLuongPlot,
+        ISNULL(SUM(OD.DienTich), 0) AS TongDienTich
+    FROM dbo.NONGTRAI NT
+    LEFT JOIN dbo.NHANVIEN NV ON NT.MaChuNongTrai = NV.MaNV
+    LEFT JOIN dbo.ODAT OD ON NT.MaNongTrai = OD.MaNongTrai
+    WHERE 1=1
+  `;
   const request = new sql.Request(pool);
   if (status) {
-    query += ' WHERE TrangThai = @status';
+    query += ` AND NT.TrangThai = @status`;
     request.input('status', sql.VarChar, status);
   }
+  query += `
+    GROUP BY 
+        NT.MaNongTrai,
+        NT.TenNongTrai,
+        NT.DiaChi,
+        NT.TrangThai,
+        NT.CreatedAt,
+        NT.UpdatedAt,
+        NT.MaChuNongTrai,
+        NV.Ho,
+        NV.Ten,
+        NV.Email,
+        NV.DienThoai
+    ORDER BY NT.CreatedAt DESC
+  `;
   const result = await request.query(query);
   return result.recordset;
 };
@@ -18,7 +51,38 @@ export const getFarmsByFarmerId = async (farmerId) => {
   const pool = getPool();
   const request = new sql.Request(pool);
   request.input('farmerId', sql.VarChar, farmerId);
-  const result = await request.query(`SELECT * FROM dbo.NONGTRAI WHERE MaChuNongTrai = @farmerId`);
+  const result = await request.query(`
+    SELECT 
+        NT.MaNongTrai,
+        NT.TenNongTrai,
+        NT.DiaChi,
+        NT.TrangThai,
+        NT.CreatedAt,
+        NT.UpdatedAt,
+        NT.MaChuNongTrai,
+        LTRIM(RTRIM(NV.Ho + ' ' + NV.Ten)) AS TenChuNongTrai,
+        NV.Email AS EmailChuNongTrai,
+        NV.DienThoai AS DienThoaiChuNongTrai,
+        COUNT(OD.MaODat) AS SoLuongPlot,
+        ISNULL(SUM(OD.DienTich), 0) AS TongDienTich
+    FROM dbo.NONGTRAI NT
+    LEFT JOIN dbo.NHANVIEN NV ON NT.MaChuNongTrai = NV.MaNV
+    LEFT JOIN dbo.ODAT OD ON NT.MaNongTrai = OD.MaNongTrai
+    WHERE NT.MaChuNongTrai = @farmerId
+    GROUP BY 
+        NT.MaNongTrai,
+        NT.TenNongTrai,
+        NT.DiaChi,
+        NT.TrangThai,
+        NT.CreatedAt,
+        NT.UpdatedAt,
+        NT.MaChuNongTrai,
+        NV.Ho,
+        NV.Ten,
+        NV.Email,
+        NV.DienThoai
+    ORDER BY NT.CreatedAt DESC
+  `);
   return result.recordset;
 };
 
@@ -26,8 +90,38 @@ export const getFarmById = async (id) => {
   const pool = getPool();
   const request = new sql.Request(pool);
   request.input('id', sql.VarChar, id);
-  const result = await request.query(`SELECT * FROM dbo.NONGTRAI WHERE MaNongTrai = @id`);
-  return result.recordset[0];
+  const result = await request.query(`
+    SELECT 
+        NT.MaNongTrai,
+        NT.TenNongTrai,
+        NT.DiaChi,
+        NT.TrangThai,
+        NT.CreatedAt,
+        NT.UpdatedAt,
+        NT.MaChuNongTrai,
+        LTRIM(RTRIM(NV.Ho + ' ' + NV.Ten)) AS TenChuNongTrai,
+        NV.Email AS EmailChuNongTrai,
+        NV.DienThoai AS DienThoaiChuNongTrai,
+        COUNT(OD.MaODat) AS SoLuongPlot,
+        ISNULL(SUM(OD.DienTich), 0) AS TongDienTich
+    FROM dbo.NONGTRAI NT
+    LEFT JOIN dbo.NHANVIEN NV ON NT.MaChuNongTrai = NV.MaNV
+    LEFT JOIN dbo.ODAT OD ON NT.MaNongTrai = OD.MaNongTrai
+    WHERE NT.MaNongTrai = @id
+    GROUP BY 
+        NT.MaNongTrai,
+        NT.TenNongTrai,
+        NT.DiaChi,
+        NT.TrangThai,
+        NT.CreatedAt,
+        NT.UpdatedAt,
+        NT.MaChuNongTrai,
+        NV.Ho,
+        NV.Ten,
+        NV.Email,
+        NV.DienThoai
+  `);
+  return result.recordset[0] || null;
 };
 
 export const createFarm = async (farmData) => {

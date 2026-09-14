@@ -1,0 +1,80 @@
+-- 005_add_farming_and_harvest_tables.sql
+-- Add IoT sensor columns to ODAT, and create NHATKYCANHTAC, YEUCAUCHAMSOC, THUHOACH tables
+
+-- 1. Add columns to ODAT (idempotent with IF NOT EXISTS checks)
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.ODAT') AND name = 'CameraUrl')
+    ALTER TABLE dbo.ODAT ADD CameraUrl NVARCHAR(500) NULL;
+
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.ODAT') AND name = 'HinhAnhThumbnail')
+    ALTER TABLE dbo.ODAT ADD HinhAnhThumbnail NVARCHAR(500) NULL;
+
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.ODAT') AND name = 'DoAmDat')
+    ALTER TABLE dbo.ODAT ADD DoAmDat DECIMAL(5,2) NULL;
+
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.ODAT') AND name = 'NhietDo')
+    ALTER TABLE dbo.ODAT ADD NhietDo DECIMAL(5,2) NULL;
+
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.ODAT') AND name = 'DoPH')
+    ALTER TABLE dbo.ODAT ADD DoPH DECIMAL(4,2) NULL;
+
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.ODAT') AND name = 'AnhSangLux')
+    ALTER TABLE dbo.ODAT ADD AnhSangLux INT NULL;
+
+-- 2. CREATE TABLE dbo.NHATKYCANHTAC
+IF OBJECT_ID(N'dbo.NHATKYCANHTAC', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.NHATKYCANHTAC (
+        MaNhatKy VARCHAR(20) PRIMARY KEY,
+        MaHopDong VARCHAR(20) NOT NULL REFERENCES dbo.HOPDONGTHUE(MaHopDong),
+        MaODat VARCHAR(20) NOT NULL REFERENCES dbo.ODAT(MaODat),
+        NgayGhi DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+        HoatDong NVARCHAR(100) NOT NULL,
+        GiaiDoanCay NVARCHAR(100) NOT NULL,
+        TienDoPhanTram INT NOT NULL DEFAULT 0 CHECK (TienDoPhanTram >= 0 AND TienDoPhanTram <= 100),
+        MoTa NVARCHAR(1000) NULL,
+        HinhAnhMinhChung NVARCHAR(500) NULL,
+        NguoiGhi VARCHAR(20) NULL REFERENCES dbo.NHANVIEN(MaNV),
+        CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+        UpdatedAt DATETIME2 NULL
+    );
+END;
+
+-- 3. CREATE TABLE dbo.YEUCAUCHAMSOC
+IF OBJECT_ID(N'dbo.YEUCAUCHAMSOC', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.YEUCAUCHAMSOC (
+        MaYeuCau VARCHAR(20) PRIMARY KEY,
+        MaHopDong VARCHAR(20) NOT NULL REFERENCES dbo.HOPDONGTHUE(MaHopDong),
+        MaKH VARCHAR(20) NOT NULL REFERENCES dbo.KHACHHANG(MaKH),
+        LoaiYeuCau NVARCHAR(100) NOT NULL,
+        MoTa NVARCHAR(1000) NOT NULL,
+        TrangThai VARCHAR(30) NOT NULL DEFAULT 'PENDING' CHECK (TrangThai IN ('PENDING','IN_PROGRESS','COMPLETED','REJECTED')),
+        GhiChuPhanHoi NVARCHAR(1000) NULL,
+        HinhAnhKetQua NVARCHAR(500) NULL,
+        NguoiXuLy VARCHAR(20) NULL REFERENCES dbo.NHANVIEN(MaNV),
+        CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+        CompletedAt DATETIME2 NULL,
+        UpdatedAt DATETIME2 NULL
+    );
+END;
+
+-- 4. CREATE TABLE dbo.THUHOACH
+IF OBJECT_ID(N'dbo.THUHOACH', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.THUHOACH (
+        MaThuHoach VARCHAR(20) PRIMARY KEY,
+        MaHopDong VARCHAR(20) NOT NULL REFERENCES dbo.HOPDONGTHUE(MaHopDong),
+        NgayThuHoachDuKien DATE NOT NULL,
+        NgayThuHoachThucTe DATE NULL,
+        SanLuongDuKien NVARCHAR(50) NOT NULL,
+        SanLuongThucTe NVARCHAR(50) NULL,
+        TrangThaiThuHoach VARCHAR(30) NOT NULL DEFAULT 'SCHEDULED' CHECK (TrangThaiThuHoach IN ('SCHEDULED','IN_PROGRESS','HARVESTED','CANCELLED')),
+        TrangThaiDongGoi VARCHAR(30) NOT NULL DEFAULT 'NOT_PACKED' CHECK (TrangThaiDongGoi IN ('NOT_PACKED','PACKED','STORAGE_COOL')),
+        TrangThaiGiaoHang VARCHAR(30) NOT NULL DEFAULT 'WAITING_PICKUP' CHECK (TrangThaiGiaoHang IN ('WAITING_PICKUP','DELIVERING','DELIVERED')),
+        DiaChiGiaoHang NVARCHAR(500) NOT NULL,
+        MaVanDon VARCHAR(50) NULL,
+        GhiChu NVARCHAR(500) NULL,
+        CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+        UpdatedAt DATETIME2 NULL
+    );
+END;

@@ -19,19 +19,39 @@ export default function FarmDetailPage() {
 
   // Rental modal state
   const [rentingPlot, setRentingPlot] = useState<SharedPlotItem | null>(null);
-  const [selectedCrop, setSelectedCrop] = useState<string>("Rau củ hữu cơ cao cấp");
+  const [crops, setCrops] = useState<{ MaCayTrong: string; TenCayTrong: string; LoaiCay: string; ThoiGianThuHoach: number }[]>([]);
+  const [selectedCrop, setSelectedCrop] = useState<string>("CT001");
   const [durationMonths, setDurationMonths] = useState<number>(6);
   const [successMessage, setSuccessMessage] = useState<string>("");
   const [errorMessage, setErrorMessage] = useState<string>("");
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   useEffect(() => {
+    let mounted = true;
+    async function loadData() {
+      if (!id) return;
+      const detail = await customerService.fetchFarmDetailAsync(id);
+      if (mounted && detail) {
+        setFarmData(detail);
+      }
+      const cropsList = await customerService.fetchCropsAsync();
+      if (mounted && cropsList && cropsList.length > 0) {
+        setCrops(cropsList);
+        setSelectedCrop(cropsList[0].MaCayTrong);
+      }
+    }
+    loadData();
+
     function handleSync() {
       if (id) {
         setFarmData(customerService.getFarmDetail(id) || null);
       }
     }
     window.addEventListener("pf_data_changed", handleSync);
-    return () => window.removeEventListener("pf_data_changed", handleSync);
+    return () => {
+      mounted = false;
+      window.removeEventListener("pf_data_changed", handleSync);
+    };
   }, [id]);
 
   function handleLogout() {
@@ -42,31 +62,43 @@ export default function FarmDetailPage() {
 
   function handleOpenRentModal(plot: SharedPlotItem) {
     setRentingPlot(plot);
-    setSelectedCrop(farmData?.farm.specialties[0] || "Rau củ hữu cơ cao cấp");
+    if (crops.length > 0) {
+      setSelectedCrop(crops[0].MaCayTrong);
+    }
     setDurationMonths(6);
     setErrorMessage("");
   }
 
-  function handleConfirmRent() {
+  async function handleConfirmRent() {
     if (!rentingPlot) return;
+    setIsSubmitting(true);
+    setErrorMessage("");
     try {
-      const result = customerService.rentPlot({
+      const result = await customerService.rentPlotAsync({
         plotId: rentingPlot.id,
         cropType: selectedCrop,
         durationMonths,
       });
 
+      const matchedCrop = crops.find(c => c.MaCayTrong === selectedCrop);
+      const cropName = matchedCrop ? matchedCrop.TenCayTrong : result.contract.plantCrop;
+
       setSuccessMessage(
-        `Chúc mừng bạn đã thuê thành công thửa đất ${result.plot.plotCode} (${result.plot.plantCrop}) với hợp đồng ${result.contract.id}! Kỹ sư nông dân ${result.plot.farmerName} đã nhận bàn giao quản lý.`,
+        `Chúc mừng bạn đã thuê thành công thửa đất ${result.plot.plotCode} (${cropName}) với mã hợp đồng ${result.contract.id}! Kỹ sư phụ trách: ${result.plot.farmerName || "PlotFarm"} đã nhận bàn giao.`,
       );
       setRentingPlot(null);
 
-      // Refresh view data
+      // Refresh live view data from server
       if (id) {
-        setFarmData(customerService.getFarmDetail(id) || null);
+        const refreshed = await customerService.fetchFarmDetailAsync(id);
+        if (refreshed) {
+          setFarmData(refreshed);
+        }
       }
     } catch (err: unknown) {
       setErrorMessage((err as Error).message || "Lỗi khi thuê thửa đất.");
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
@@ -352,8 +384,9 @@ export default function FarmDetailPage() {
               size="sm"
               fullWidth={false}
               onClick={handleConfirmRent}
+              disabled={isSubmitting}
             >
-              Xác Nhận Thuê & Ký Hợp Đồng
+              {isSubmitting ? "Đang xử lý ký hợp đồng..." : "Xác Nhận Thuê & Ký Hợp Đồng"}
             </Button>
           </>
         }
@@ -379,20 +412,26 @@ export default function FarmDetailPage() {
 
           <div>
             <label className="block font-semibold text-gray-700 mb-1">
-              Loại cây trồng mong muốn canh tác *
+              Loại cây trồng mong muốn canh tác (Danh mục hệ thống) *
             </label>
             <select
               value={selectedCrop}
               onChange={(e) => setSelectedCrop(e.target.value)}
               className="w-full rounded-lg border border-gray-300 p-2.5 text-xs bg-white focus:border-emerald-600 focus:outline-none"
             >
-              {farm.specialties.map((spec, i) => (
-                <option key={i} value={spec}>
-                  {spec}
-                </option>
-              ))}
-              <option value="Rau củ hữu cơ cao cấp">Rau củ hữu cơ cao cấp</option>
-              <option value="Cây ăn trái đặc sản">Cây ăn trái đặc sản</option>
+              {crops.length > 0 ? (
+                crops.map((crop) => (
+                  <option key={crop.MaCayTrong} value={crop.MaCayTrong}>
+                    🌱 {crop.TenCayTrong} ({crop.LoaiCay} • Chu kỳ thu hoạch: {crop.ThoiGianThuHoach} ngày)
+                  </option>
+                ))
+              ) : (
+                farm.specialties.map((spec, i) => (
+                  <option key={i} value={spec}>
+                    🌱 {spec}
+                  </option>
+                ))
+              )}
             </select>
           </div>
 

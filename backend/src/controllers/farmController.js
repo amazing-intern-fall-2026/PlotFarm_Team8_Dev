@@ -3,7 +3,7 @@ import * as farmService from '../services/farmService.js';
 
 export const getAllFarms = async (req, res, next) => {
   try {
-    const farms = await farmService.getAllFarms(req.user);
+    const farms = await farmService.getAllFarms(req.user, req.query);
     successResponse(res, { data: farms });
   } catch (err) { next(err); }
 };
@@ -17,7 +17,7 @@ export const getMyFarms = async (req, res, next) => {
 
 export const getFarmById = async (req, res, next) => {
   try {
-    const farm = await farmService.getFarmById(req.params.id);
+    const farm = await farmService.getFarmById(req.params.id, req.user);
     successResponse(res, { data: farm });
   } catch (err) { next(err); }
 };

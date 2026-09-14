@@ -20,16 +20,31 @@ export default function FarmListPage({
   const { user: authUser, logout: authLogout } = useAuth();
   const user = authUser || getCurrentUser();
   const [searchTerm, setSearchTerm] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
   const [farms, setFarms] = useState<SharedFarmItem[]>(() =>
     customerService.getAllFarms(),
   );
 
   useEffect(() => {
+    let mounted = true;
+    async function loadFarms() {
+      setIsLoading(true);
+      const data = await customerService.fetchFarmsAsync();
+      if (mounted) {
+        setFarms(data);
+        setIsLoading(false);
+      }
+    }
+    loadFarms();
+
     function handleSync() {
       setFarms(customerService.getAllFarms());
     }
     window.addEventListener("pf_data_changed", handleSync);
-    return () => window.removeEventListener("pf_data_changed", handleSync);
+    return () => {
+      mounted = false;
+      window.removeEventListener("pf_data_changed", handleSync);
+    };
   }, []);
 
   const filteredFarms = useMemo(() => {
@@ -108,7 +123,11 @@ export default function FarmListPage({
           </div>
         </div>
 
-        {filteredFarms.length === 0 ? (
+        {isLoading ? (
+          <div className="p-8 text-center text-sm text-gray-500">
+            <span className="inline-block animate-spin mr-2">⏳</span> Đang đồng bộ danh sách nông trại từ máy chủ...
+          </div>
+        ) : filteredFarms.length === 0 ? (
           <div className="p-8">
             <EmptyState
               title="Không tìm thấy nông trại"
