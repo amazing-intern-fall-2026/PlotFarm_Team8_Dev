@@ -69,3 +69,20 @@ export interface ApiResponse<T = unknown> {
   data: T;
   meta?: unknown;
 }
+
+export interface ForgotPasswordRequest {
+  identifier: string;
+}
+
+export interface ForgotPasswordResponseData {
+  username: string;
+  emailMasked: string;
+  expiresInMinutes: number;
+}
+
+export interface ResetPasswordRequest {
+  identifier: string;
+  otp: string;
+  newPassword: string;
+  confirmPassword?: string;
+}

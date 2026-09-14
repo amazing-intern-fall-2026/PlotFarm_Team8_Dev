@@ -21,9 +21,20 @@ const mockAuthRepo = {
   createAccountForEmployee: jest.fn(),
   getCustomerById: jest.fn(),
   getEmployeeById: jest.fn(),
+  findAccountWithContactByIdentifier: jest.fn(),
+  createPasswordResetRecord: jest.fn(),
+  findLatestValidResetOtp: jest.fn(),
+  invalidateActiveOtpsByUsername: jest.fn(),
+  markOtpAsUsed: jest.fn(),
+  updateAccountPassword: jest.fn(),
+};
+
+const mockEmailService = {
+  sendPasswordResetOtpEmail: jest.fn().mockResolvedValue({ success: true }),
 };
 
 jest.unstable_mockModule('../src/repositories/authRepository.js', () => mockAuthRepo);
+jest.unstable_mockModule('../src/services/emailService.js', () => mockEmailService);
 jest.unstable_mockModule('../src/utils/transactionHelper.js', () => ({
   runInTransaction: jest.fn(async (cb) => {
     return await cb(mockTransaction);
@@ -31,9 +42,13 @@ jest.unstable_mockModule('../src/utils/transactionHelper.js', () => ({
 }));
 
 const authService = await import('../src/services/authService.js');
-const { validateRegister, validateRegisterEmployee, validateLogin } = await import(
-  '../src/validators/authValidator.js'
-);
+const {
+  validateRegister,
+  validateRegisterEmployee,
+  validateLogin,
+  validateForgotPassword,
+  validateResetPassword,
+} = await import('../src/validators/authValidator.js');
 
 describe('Authentication Test Suite', () => {
   beforeEach(() => {
@@ -411,6 +426,113 @@ describe('Authentication Test Suite', () => {
         userType: 'EMPLOYEE',
         role: 'ADMIN',
       });
+    });
+  });
+
+  describe('Forgot & Reset Password Tests', () => {
+    test('requestPasswordReset should throw 404 if account/email not found', async () => {
+      mockAuthRepo.findAccountWithContactByIdentifier.mockResolvedValueOnce(null);
+
+      await expect(
+        authService.requestPasswordReset('nonexistent_user')
+      ).rejects.toThrow('Không tìm thấy tài khoản hoặc email trong hệ thống');
+    });
+
+    test('requestPasswordReset should generate OTP and save record on valid user', async () => {
+      mockAuthRepo.findAccountWithContactByIdentifier.mockResolvedValueOnce({
+        username: 'farmer1',
+        email: 'farmer@plotfarm.com',
+        fullName: 'Le Van Farmer',
+        role: 'FARMER',
+      });
+      mockAuthRepo.createPasswordResetRecord.mockResolvedValueOnce(1);
+
+      const result = await authService.requestPasswordReset('farmer1');
+      expect(result.username).toBe('farmer1');
+      expect(result.emailMasked).toBeDefined();
+      expect(result.expiresInMinutes).toBe(5);
+      expect(mockAuthRepo.invalidateActiveOtpsByUsername).toHaveBeenCalledWith('farmer1');
+      expect(mockAuthRepo.createPasswordResetRecord).toHaveBeenCalledWith(
+        expect.objectContaining({
+          username: 'farmer1',
+          email: 'farmer@plotfarm.com',
+        })
+      );
+      expect(mockEmailService.sendPasswordResetOtpEmail).toHaveBeenCalled();
+    });
+
+    test('resetPassword should throw error if account not found', async () => {
+      mockAuthRepo.findAccountWithContactByIdentifier.mockResolvedValueOnce(null);
+
+      await expect(
+        authService.resetPassword({
+          identifier: 'ghost',
+          otp: '123456',
+          newPassword: 'NewPassword123',
+        })
+      ).rejects.toThrow('Tài khoản không tồn tại');
+    });
+
+    test('resetPassword should throw error if OTP is invalid or expired', async () => {
+      mockAuthRepo.findAccountWithContactByIdentifier.mockResolvedValueOnce({
+        username: 'farmer1',
+        email: 'farmer@plotfarm.com',
+      });
+      mockAuthRepo.findLatestValidResetOtp.mockResolvedValueOnce(null);
+
+      await expect(
+        authService.resetPassword({
+          identifier: 'farmer1',
+          otp: '123456',
+          newPassword: 'NewPassword123',
+        })
+      ).rejects.toThrow('Mã xác thực OTP không tồn tại hoặc đã hết hạn');
+    });
+
+    test('resetPassword should throw error if OTP does not match hash', async () => {
+      mockAuthRepo.findAccountWithContactByIdentifier.mockResolvedValueOnce({
+        username: 'farmer1',
+        email: 'farmer@plotfarm.com',
+      });
+      const realOtpHashed = await bcrypt.hash('654321', 10);
+      mockAuthRepo.findLatestValidResetOtp.mockResolvedValueOnce({
+        Id: 10,
+        TenDangNhap: 'farmer1',
+        OtpHash: realOtpHashed,
+      });
+
+      await expect(
+        authService.resetPassword({
+          identifier: 'farmer1',
+          otp: '000000', // wrong OTP
+          newPassword: 'NewPassword123',
+        })
+      ).rejects.toThrow('Mã xác thực OTP không chính xác');
+    });
+
+    test('resetPassword should update password and mark OTP as used on correct OTP', async () => {
+      mockAuthRepo.findAccountWithContactByIdentifier.mockResolvedValueOnce({
+        username: 'farmer1',
+        email: 'farmer@plotfarm.com',
+      });
+      const validOtpHashed = await bcrypt.hash('123456', 10);
+      mockAuthRepo.findLatestValidResetOtp.mockResolvedValueOnce({
+        Id: 42,
+        TenDangNhap: 'farmer1',
+        OtpHash: validOtpHashed,
+      });
+      mockAuthRepo.updateAccountPassword.mockResolvedValueOnce(true);
+      mockAuthRepo.markOtpAsUsed.mockResolvedValueOnce();
+
+      const result = await authService.resetPassword({
+        identifier: 'farmer1',
+        otp: '123456',
+        newPassword: 'NewSecurePassword123',
+      });
+
+      expect(result.username).toBe('farmer1');
+      expect(mockAuthRepo.updateAccountPassword).toHaveBeenCalled();
+      expect(mockAuthRepo.markOtpAsUsed).toHaveBeenCalledWith(42, mockTransaction);
     });
   });
 });

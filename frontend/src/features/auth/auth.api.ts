@@ -2,9 +2,12 @@ import type {
   ApiResponse,
   AuthResponse,
   BackendError,
+  ForgotPasswordRequest,
+  ForgotPasswordResponseData,
   LoginRequest,
   RegisterRequest,
   RegisterResponseData,
+  ResetPasswordRequest,
   User,
 } from "./auth.types";
 
@@ -13,6 +16,7 @@ const API_URL = (import.meta.env.VITE_API_URL || "/api/v1").replace(/\/$/, "");
 const STORAGE_KEYS = {
   TOKEN: "accessToken",
   USER: "authUser",
+  REMEMBER: "rememberMe",
 };
 
 // Predefined accounts matching seeded database
@@ -29,6 +33,10 @@ export const TEST_ACCOUNTS: Record<string, { username: string; password: string;
 };
 
 export const DEMO_ACCOUNTS = TEST_ACCOUNTS;
+
+// ─────────────────────────────────────────────────────────────
+// Network helpers
+// ─────────────────────────────────────────────────────────────
 
 /**
  * Extract structured BackendError from fetch Response or catch block
@@ -51,10 +59,14 @@ async function parseErrorResponse(response: Response): Promise<BackendError> {
   }
 }
 
+// ─────────────────────────────────────────────────────────────
+// Auth API functions
+// ─────────────────────────────────────────────────────────────
+
 /**
  * Handle Login request directly with Backend API
  */
-export async function login(credentials: LoginRequest): Promise<AuthResponse> {
+export async function login(credentials: LoginRequest, rememberMe = true): Promise<AuthResponse> {
   const trimmedUsername = credentials.username.trim();
 
   let response: Response;
@@ -132,6 +144,81 @@ export async function register(
 }
 
 /**
+ * Request password reset (Forgot Password)
+ */
+export async function forgotPassword(
+  payload: ForgotPasswordRequest,
+): Promise<ApiResponse<ForgotPasswordResponseData>> {
+  const trimmed = payload.identifier.trim();
+
+  let response: Response | null = null;
+  let networkFailed = false;
+
+  try {
+    response = await fetch(`${API_URL}/auth/forgot-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ identifier: trimmed }),
+    });
+  } catch {
+    networkFailed = true;
+  }
+
+  if (networkFailed) {
+    throw {
+      status: 0,
+      message: "Không thể kết nối đến máy chủ Backend. Vui lòng kiểm tra lại dịch vụ Backend đang chạy tại cổng 3000.",
+      errors: null,
+    } as BackendError;
+  }
+
+  if (!response || !response.ok) {
+    const errorData = response ? await parseErrorResponse(response) : { message: "Lỗi kết nối", status: 500 };
+    throw errorData;
+  }
+
+  return (await response.json()) as ApiResponse<ForgotPasswordResponseData>;
+}
+
+/**
+ * Reset password using OTP code
+ */
+export async function resetPassword(
+  payload: ResetPasswordRequest,
+): Promise<ApiResponse<{ username: string }>> {
+  const trimmedIdentifier = payload.identifier.trim();
+  const trimmedOtp = payload.otp.trim();
+
+  let response: Response | null = null;
+  let networkFailed = false;
+
+  try {
+    response = await fetch(`${API_URL}/auth/reset-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ identifier: trimmedIdentifier, otp: trimmedOtp, newPassword: payload.newPassword }),
+    });
+  } catch {
+    networkFailed = true;
+  }
+
+  if (networkFailed) {
+    throw {
+      status: 0,
+      message: "Không thể kết nối đến máy chủ Backend. Vui lòng kiểm tra lại dịch vụ Backend đang chạy tại cổng 3000.",
+      errors: null,
+    } as BackendError;
+  }
+
+  if (!response || !response.ok) {
+    const errorData = response ? await parseErrorResponse(response) : { message: "Lỗi kết nối", status: 500 };
+    throw errorData;
+  }
+
+  return (await response.json()) as ApiResponse<{ username: string }>;
+}
+
+/**
  * Fetch current user profile with JWT from Backend
  */
 export async function fetchCurrentUser(): Promise<User> {
@@ -160,55 +247,84 @@ export async function fetchCurrentUser(): Promise<User> {
   const res = await response.json();
   const user = res.data?.user as User;
   if (user) {
-    localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(user));
+    getActiveStorage().setItem(STORAGE_KEYS.USER, JSON.stringify(user));
   }
   return user;
 }
 
+// ─────────────────────────────────────────────────────────────
+// Session management
+// ─────────────────────────────────────────────────────────────
+
 /**
- * Save auth session to localStorage
+ * Lưu auth session vào storage phù hợp.
+ * rememberMe=true → localStorage (nhớ sau khi tắt trình duyệt)
+ * rememberMe=false → sessionStorage (mất khi đóng tab)
  */
-export function saveAuthSession(data: AuthResponse): void {
+export function saveAuthSession(data: AuthResponse, rememberMe = true): void {
+  const storage = pickStorage(rememberMe);
   if (data.accessToken) {
-    localStorage.setItem(STORAGE_KEYS.TOKEN, data.accessToken);
+    storage.setItem(STORAGE_KEYS.TOKEN, data.accessToken);
   }
   if (data.user) {
-    localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(data.user));
+    storage.setItem(STORAGE_KEYS.USER, JSON.stringify(data.user));
   }
+  // Lưu lại lựa chọn để các hàm getter biết tìm ở đâu
+  storage.setItem(STORAGE_KEYS.REMEMBER, rememberMe ? "1" : "0");
 }
 
 /**
- * Get current user from localStorage
+ * Get current user from active storage
  */
 export function getCurrentUser(): User | null {
   try {
-    const stored = localStorage.getItem(STORAGE_KEYS.USER);
-    return stored ? JSON.parse(stored) : null;
+    const stored = getActiveStorage().getItem(STORAGE_KEYS.USER);
+    return stored ? (JSON.parse(stored) as User) : null;
   } catch {
     return null;
   }
 }
 
 /**
- * Get current access token from localStorage
+ * Get current access token from active storage
  */
 export function getAccessToken(): string | null {
-  return localStorage.getItem(STORAGE_KEYS.TOKEN);
+  return getActiveStorage().getItem(STORAGE_KEYS.TOKEN);
 }
 
 /**
- * Check if user is currently authenticated
+ * Kiểm tra user đã đăng nhập và token chưa hết hạn.
+ * Nếu token hết hạn → tự động xoá session và trả về false.
  */
 export function isAuthenticated(): boolean {
-  return Boolean(getAccessToken());
+  const token = getAccessToken();
+  if (!token) return false;
+
+  // Mock demo tokens không có exp → luôn hợp lệ
+  if (token.startsWith("mock-jwt-token")) return true;
+
+  if (isTokenExpired(token)) {
+    // Token hết hạn → dọn session, bắt user đăng nhập lại
+    logout();
+    return false;
+  }
+
+  return true;
 }
 
 /**
- * Clear session and logout
+ * Clear session from both storages (để chắc chắn không còn sót)
  */
 export function logout(): void {
-  localStorage.removeItem(STORAGE_KEYS.TOKEN);
-  localStorage.removeItem(STORAGE_KEYS.USER);
+  for (const key of Object.values(STORAGE_KEYS)) {
+    localStorage.removeItem(key);
+    sessionStorage.removeItem(key);
+  }
+  // Xóa thêm các key tương thích ngược
+  localStorage.removeItem("token");
+  localStorage.removeItem("user");
+  sessionStorage.removeItem("token");
+  sessionStorage.removeItem("user");
 }
 
 /**

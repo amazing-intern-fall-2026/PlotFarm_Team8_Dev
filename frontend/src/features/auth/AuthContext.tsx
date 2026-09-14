@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useState } from "react";
 import type { User } from "./auth.types";
-import { getCurrentUser, getAccessToken, saveAuthSession, logout as apiLogout } from "./auth.api";
+import { getCurrentUser, getAccessToken, logout as apiLogout } from "./auth.api";
 
 interface AuthContextType {
   user: User | null;
@@ -28,7 +28,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
 
   const [token, setToken] = useState<string | null>(() => {
-    return getAccessToken() || (typeof window !== "undefined" ? localStorage.getItem("token") : null);
+    return getAccessToken();
   });
 
   const [isLoading] = useState<boolean>(false);
@@ -38,23 +38,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setToken(newToken);
     setUser(newUser);
     setError(null);
-
-    // Lưu vào storage cho auth.api
-    saveAuthSession({ accessToken: newToken, user: newUser });
-    // Đồng bộ thêm khóa token/user cho tương thích ngược
-    localStorage.setItem("token", newToken);
-    localStorage.setItem("user", JSON.stringify(newUser));
+    // saveAuthSession đã được gọi bởi LoginForm với rememberMe đúng
+    // AuthContext chỉ cập nhật React state
   };
 
   const logout = () => {
     setToken(null);
     setUser(null);
     setError(null);
-
-    // Xóa session ở cả auth.api lẫn localStorage gốc
+    // apiLogout() xóa cả localStorage và sessionStorage
     apiLogout();
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
   };
 
   return (

@@ -1,12 +1,14 @@
+import { useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import LoginForm from "../components/LoginForm";
 import RegisterForm from "../components/RegisterForm";
+import ForgotPasswordForm from "../components/ForgotPasswordForm";
 import { getCurrentUser, getRedirectPathByRole, isAuthenticated, logout } from "./auth.api";
 import { Alert } from "../../components/ui";
 import { useAuth } from "./AuthContext";
 
 interface AuthPageProps {
-  initialMode?: "login" | "register";
+  initialMode?: "login" | "register" | "forgot-password";
 }
 
 export default function AuthPage({ initialMode }: AuthPageProps) {
@@ -17,11 +19,21 @@ export default function AuthPage({ initialMode }: AuthPageProps) {
 
   // Purely derived mode from URL or props without setState in effect
   const isRegisterRoute = location.pathname.includes("register");
-  const mode: "login" | "register" =
-    initialMode || (isRegisterRoute ? "register" : "login");
+  const isForgotRoute = location.pathname.includes("forgot-password");
+  const mode: "login" | "register" | "forgot-password" =
+    initialMode || (isForgotRoute ? "forgot-password" : isRegisterRoute ? "register" : "login");
 
-  function handleSwitchMode(newMode: "login" | "register") {
-    navigate(newMode === "register" ? "/register" : "/login");
+  // Nếu user đã đăng nhập mà bấm Back về /login → tự redirect về portal của họ
+  useEffect(() => {
+    if (currentUser && mode === "login") {
+      navigate(getRedirectPathByRole(currentUser.role), { replace: true });
+    }
+  }, [currentUser, mode, navigate]);
+
+  function handleSwitchMode(newMode: "login" | "register" | "forgot-password") {
+    if (newMode === "register") navigate("/register");
+    else if (newMode === "forgot-password") navigate("/forgot-password");
+    else navigate("/login");
   }
 
   function handleLogoutCurrent() {
@@ -131,11 +143,16 @@ export default function AuthPage({ initialMode }: AuthPageProps) {
           {mode === "login" ? (
             <LoginForm
               onSwitchToRegister={() => handleSwitchMode("register")}
+              onSwitchToForgotPassword={() => handleSwitchMode("forgot-password")}
             />
-          ) : (
+          ) : mode === "register" ? (
             <RegisterForm
               onSwitchToLogin={() => handleSwitchMode("login")}
               onSuccessRedirect="/customer"
+            />
+          ) : (
+            <ForgotPasswordForm
+              onSwitchToLogin={() => handleSwitchMode("login")}
             />
           )}
         </div>
