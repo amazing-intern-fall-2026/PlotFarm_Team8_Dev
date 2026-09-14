@@ -55,3 +55,31 @@ export const getMe = async (req, res, next) => {
     next(err);
   }
 };
+
+export const forgotPassword = async (req, res, next) => {
+  try {
+    const { identifier } = req.body;
+    const result = await authService.requestPasswordReset(identifier);
+    successResponse(res, {
+      message: 'Mã xác thực đặt lại mật khẩu đã được gửi đến email của bạn',
+      data: result,
+      statusCode: 200,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const resetPassword = async (req, res, next) => {
+  try {
+    const { identifier, otp, newPassword } = req.body;
+    const result = await authService.resetPassword({ identifier, otp, newPassword });
+    successResponse(res, {
+      message: result.message,
+      data: { username: result.username },
+      statusCode: 200,
+    });
+  } catch (err) {
+    next(err);
+  }
+};

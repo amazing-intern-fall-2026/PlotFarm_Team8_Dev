@@ -58,3 +58,11 @@ export const JWT_SECRET = process.env.JWT_SECRET || 'plotfarm_jwt_secret_key_def
 export const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '1d';
 export const BCRYPT_SALT_ROUNDS = parseInt(process.env.BCRYPT_SALT_ROUNDS, 10) || 10;
 
+// Email SMTP configuration (optional - falls back to console log in dev mode)
+export const SMTP_HOST = process.env.SMTP_HOST || '';
+export const SMTP_PORT = parseInt(process.env.SMTP_PORT, 10) || 587;
+export const SMTP_USER = process.env.SMTP_USER || '';
+export const SMTP_PASS = process.env.SMTP_PASS || '';
+export const SMTP_SECURE = toBoolean(process.env.SMTP_SECURE || 'false');
+export const EMAIL_FROM = process.env.EMAIL_FROM || '"PlotFarm Portal" <no-reply@plotfarm.com>';
+

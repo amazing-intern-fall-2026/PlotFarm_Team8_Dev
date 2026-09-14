@@ -2,9 +2,12 @@ import type {
   ApiResponse,
   AuthResponse,
   BackendError,
+  ForgotPasswordRequest,
+  ForgotPasswordResponseData,
   LoginRequest,
   RegisterRequest,
   RegisterResponseData,
+  ResetPasswordRequest,
   User,
 } from "./auth.types";
 
@@ -227,6 +230,106 @@ export async function register(
   }
 
   return (await response.json()) as ApiResponse<RegisterResponseData>;
+}
+
+/**
+ * Request password reset (Forgot Password)
+ */
+export async function forgotPassword(
+  payload: ForgotPasswordRequest,
+): Promise<ApiResponse<ForgotPasswordResponseData>> {
+  const trimmed = payload.identifier.trim();
+  const matchedDemo = findMatchingDemoAccount(trimmed);
+
+  let response: Response | null = null;
+  let networkFailed = false;
+
+  try {
+    response = await fetch(`${API_URL}/auth/forgot-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ identifier: trimmed }),
+    });
+  } catch {
+    networkFailed = true;
+  }
+
+  // Demo fallback when offline
+  if (networkFailed && matchedDemo) {
+    return {
+      success: true,
+      message: "Mã xác thực đặt lại mật khẩu đã được gửi (Chế độ Demo kiểm thử)",
+      data: {
+        username: matchedDemo.username,
+        emailMasked: matchedDemo.email.replace(/(.{2})(.*)(@.*)/, "$1***$3"),
+        expiresInMinutes: 15,
+        devOtp: "123456",
+      },
+    };
+  }
+
+  if (networkFailed) {
+    throw {
+      status: 0,
+      message: "Không thể kết nối đến máy chủ Backend. Vui lòng kiểm tra lại dịch vụ Backend đang chạy tại cổng 3000.",
+      errors: null,
+    } as BackendError;
+  }
+
+  if (!response || !response.ok) {
+    const errorData = response ? await parseErrorResponse(response) : { message: "Lỗi kết nối", status: 500 };
+    throw errorData;
+  }
+
+  return (await response.json()) as ApiResponse<ForgotPasswordResponseData>;
+}
+
+/**
+ * Reset password using OTP code
+ */
+export async function resetPassword(
+  payload: ResetPasswordRequest,
+): Promise<ApiResponse<{ username: string }>> {
+  const trimmedIdentifier = payload.identifier.trim();
+  const trimmedOtp = payload.otp.trim();
+  const matchedDemo = findMatchingDemoAccount(trimmedIdentifier);
+
+  let response: Response | null = null;
+  let networkFailed = false;
+
+  try {
+    response = await fetch(`${API_URL}/auth/reset-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ identifier: trimmedIdentifier, otp: trimmedOtp, newPassword: payload.newPassword }),
+    });
+  } catch {
+    networkFailed = true;
+  }
+
+  // Demo fallback when offline
+  if (networkFailed && matchedDemo && trimmedOtp === "123456") {
+    return {
+      success: true,
+      message: "Đặt lại mật khẩu thành công (Chế độ Demo). Bạn có thể đăng nhập ngay.",
+      data: { username: matchedDemo.username },
+    };
+  }
+
+  if (networkFailed) {
+    throw {
+      status: 0,
+      message: "Không thể kết nối đến máy chủ Backend. Vui lòng kiểm tra lại dịch vụ Backend đang chạy tại cổng 3000.",
+      errors: null,
+    } as BackendError;
+  }
+
+  if (!response || !response.ok) {
+    const errorData = response ? await parseErrorResponse(response) : { message: "Lỗi kết nối", status: 500 };
+    throw errorData;
+  }
+
+  return (await response.json()) as ApiResponse<{ username: string }>;
 }
 
 /**
