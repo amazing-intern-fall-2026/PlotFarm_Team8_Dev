@@ -14,7 +14,7 @@ interface AuthPageProps {
 export default function AuthPage({ initialMode }: AuthPageProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { login: setAuthContext } = useAuth();
+  const { login: setAuthContext, logout: authLogout } = useAuth();
   const [currentUser, setCurrentUser] = useState(() =>
     isAuthenticated() ? getCurrentUser() : null,
   );
@@ -32,6 +32,7 @@ export default function AuthPage({ initialMode }: AuthPageProps) {
   }
 
   function handleLogoutCurrent() {
+    authLogout();
     logout();
     setCurrentUser(null);
   }

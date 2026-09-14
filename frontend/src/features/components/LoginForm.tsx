@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { getRedirectPathByRole, login, loginWithDemoRole } from "../auth/auth.api";
+import { useAuth } from "../auth/AuthContext";
 import type { BackendError, LoginRequest } from "../auth/auth.types";
 import {
   formatBackendErrorMessage,
@@ -17,16 +18,23 @@ interface LoginFormProps {
   onSuccessRedirect?: string;
 }
 
+const REMEMBERED_USERNAME_KEY = "pf_remembered_username";
+
 export default function LoginForm({
   onSwitchToRegister,
   onSwitchToForgotPassword,
   onSuccessRedirect,
 }: LoginFormProps) {
   const navigate = useNavigate();
+  const { login: setAuthContext } = useAuth();
 
-  const [form, setForm] = useState<LoginRequest>({
-    username: "",
+  const [form, setForm] = useState<LoginRequest>(() => ({
+    username: localStorage.getItem(REMEMBERED_USERNAME_KEY) || "",
     password: "",
+  }));
+
+  const [rememberMe, setRememberMe] = useState<boolean>(() => {
+    return Boolean(localStorage.getItem(REMEMBERED_USERNAME_KEY));
   });
 
   const [fieldErrors, setFieldErrors] = useState<LoginFormErrors>({});
@@ -61,6 +69,8 @@ export default function LoginForm({
     try {
       setLoading(true);
       const auth = loginWithDemoRole(role);
+      // Cập nhật ngay vào AuthContext để ProtectedRoute nhận diện ngay
+      setAuthContext(auth.accessToken, auth.user as any);
       const targetPath = onSuccessRedirect || getRedirectPathByRole(auth.user?.role);
       navigate(targetPath, { replace: true });
     } finally {
@@ -95,6 +105,16 @@ export default function LoginForm({
 
       // Call real backend API (falls back to mock if backend 401/offline and demo username is used)
       const response = await login(form);
+
+      // Lưu hoặc xóa nhớ tên đăng nhập theo checkbox
+      if (rememberMe) {
+        localStorage.setItem(REMEMBERED_USERNAME_KEY, form.username.trim());
+      } else {
+        localStorage.removeItem(REMEMBERED_USERNAME_KEY);
+      }
+
+      // Cập nhật AuthContext để ProtectedRoute cho phép truy cập
+      setAuthContext(response.accessToken, response.user as any);
 
       // Redirect based on user role returned from backend
       const targetPath =
@@ -219,8 +239,9 @@ export default function LoginForm({
           <label className="flex items-center gap-2 text-gray-600 cursor-pointer">
             <input
               type="checkbox"
-              className="h-3.5 w-3.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
-              defaultChecked
+              className="h-3.5 w-3.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
             />
             <span>Ghi nhớ đăng nhập</span>
           </label>
