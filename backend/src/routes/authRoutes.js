@@ -1,6 +1,23 @@
 import express from 'express';
-import { register, login, getMe, registerEmployee, forgotPassword, resetPassword } from '../controllers/authController.js';
-import { validateRegister, validateRegisterEmployee, validateLogin, validateForgotPassword, validateResetPassword } from '../validators/authValidator.js';
+import {
+  register,
+  login,
+  getMe,
+  registerEmployee,
+  forgotPassword,
+  resetPassword,
+  updateProfile,
+  changePassword,
+} from '../controllers/authController.js';
+import {
+  validateRegister,
+  validateRegisterEmployee,
+  validateLogin,
+  validateForgotPassword,
+  validateResetPassword,
+  validateUpdateProfile,
+  validateChangePassword,
+} from '../validators/authValidator.js';
 import authenticate from '../middlewares/authenticate.js';
 import authorize from '../middlewares/authorize.js';
 
@@ -12,6 +29,8 @@ router.post('/login', validateLogin, login);
 router.post('/forgot-password', validateForgotPassword, forgotPassword);
 router.post('/reset-password', validateResetPassword, resetPassword);
 router.get('/me', authenticate, getMe);
+router.put('/profile', authenticate, validateUpdateProfile, updateProfile);
+router.post('/change-password', authenticate, validateChangePassword, changePassword);
 
 export default router;
 

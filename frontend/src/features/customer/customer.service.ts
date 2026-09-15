@@ -183,7 +183,7 @@ export function mapBackendPlotToShared(p: BackendPlotDto): SharedPlotItem {
   return {
     id: p.MaODat,
     assignedFarmerId: p.MaChuNongTrai || "NV001",
-    farmerName: p.TenChuNongTrai || "Kỹ sư nông dân",
+    farmerName: p.TenChuNongTrai || "Lê Văn Canh Tác",
     farmId: p.MaNongTrai,
     farmName: p.TenNongTrai || "Nông trại PlotFarm",
     plotCode: p.TenODat || `#PL-${p.MaODat}`,
@@ -222,7 +222,7 @@ export function mapBackendContractToShared(c: BackendContractDto): SharedContrac
     farmName: c.TenNongTrai || "Nông trại PlotFarm",
     customerId: c.MaKH,
     customerName: c.TenKH || "Khách hàng",
-    assignedFarmerName: c.TenChuNongTrai || "Kỹ sư canh tác PlotFarm",
+    assignedFarmerName: c.TenChuNongTrai || "Lê Văn Canh Tác",
     plantCrop: c.TenCayTrong || "Cây trồng nông nghiệp",
     startDate: startStr,
     endDate: endStr,
@@ -499,6 +499,7 @@ export const customerService = {
       const contractsDto = await apiClient.get<BackendContractDto[]>("/contracts/my");
       if (Array.isArray(contractsDto)) {
         cachedContracts = contractsDto.map(mapBackendContractToShared);
+        notifyDataChanged("contracts_fetched", cachedContracts);
         return cachedContracts;
       }
     } catch (err) {
@@ -686,24 +687,88 @@ export const customerService = {
 
   getMyPlots(customerId?: string): SharedPlotItem[] {
     const activeCustId = customerId || this.getActiveCustomerId();
+
+    // 1. If we have contracts loaded from backend, build plots directly from active contracts
+    if (cachedContracts.length > 0) {
+      const activeContracts = cachedContracts.filter(
+        (c) => (!c.customerId || c.customerId === activeCustId) && c.status === "ACTIVE",
+      );
+      if (activeContracts.length > 0) {
+        return activeContracts.map((c) => {
+          const matchedPlot = cachedPlots.find((p) => p.id === c.plotId);
+
+          // Look up latest farming log for this contract/plot
+          const relatedLogs = (cachedLogs || []).filter(
+            (l) => l.contractId === c.id || l.plotId === c.plotId || l.plot === c.plotCode,
+          );
+          const latestLog = relatedLogs.length > 0 ? relatedLogs[0] : null;
+
+          const progress = latestLog?.progress !== undefined
+            ? latestLog.progress
+            : (matchedPlot?.progress !== undefined ? matchedPlot.progress : 45);
+
+          const plantStatus = (latestLog?.plantStatus as any) || matchedPlot?.plantStatus || "Phát triển tốt";
+          const lastUpdate = latestLog?.date ? `Kỹ sư cập nhật (${latestLog.date})` : (matchedPlot?.lastUpdate || "Hệ thống IoT ghi nhận");
+          const engineerName = c.assignedFarmerName || matchedPlot?.farmerName || "Lê Văn Canh Tác";
+
+          return {
+            id: c.plotId,
+            plotCode: c.plotCode,
+            farmId: matchedPlot?.farmId || "",
+            farmName: c.farmName,
+            assignedFarmerId: matchedPlot?.assignedFarmerId || "",
+            farmerName: engineerName,
+            plotStatus: "IN_USE",
+            customerId: c.customerId || activeCustId,
+            customerName: c.customerName,
+            contractId: c.id,
+            plantCrop: c.plantCrop,
+            startDate: c.startDate,
+            endDate: c.endDate,
+            plantStatus: plantStatus,
+            progress: progress,
+            lastUpdate: lastUpdate,
+            areaSquareMeter: matchedPlot?.areaSquareMeter || 500,
+            rentalPricePerMonth: c.monthlyFee,
+            sensorData: matchedPlot?.sensorData || {
+              moisture: 68,
+              temperature: 26.5,
+              soilPh: 6.5,
+              lightLux: 15000,
+              lastUpdated: "Thời gian thực (IoT)",
+            },
+            cameraFeedUrl: matchedPlot?.cameraFeedUrl || "https://images.unsplash.com/photo-1592417817098-8f3d6910985b?w=1200&auto=format&fit=crop&q=80",
+            plotThumbnail: matchedPlot?.plotThumbnail || "https://images.unsplash.com/photo-1592417817098-8f3d6910985b?w=600&auto=format&fit=crop&q=80",
+          };
+        });
+      }
+    }
+
     const profile = this.getActiveCustomerProfile(activeCustId);
     const allPlots = this.getAllPlots();
 
     return allPlots.filter(
       (plot) =>
         plot.customerId === activeCustId ||
-        plot.customerName.toLowerCase().includes(profile.name.toLowerCase()) ||
+        (plot.customerName && profile.name && plot.customerName.toLowerCase().includes(profile.name.toLowerCase())) ||
         profile.ownedPlotCodes.includes(plot.plotCode),
     );
   },
 
   getPlotByCode(plotCode: string): SharedPlotItem | undefined {
     const all = this.getAllPlots();
-    return all.find((p) => p.plotCode === plotCode || p.id === plotCode);
+    const found = all.find((p) => p.plotCode === plotCode || p.id === plotCode);
+    if (found) return found;
+    return this.getMyPlots().find((p) => p.plotCode === plotCode || p.id === plotCode);
   },
 
   getMyContracts(customerId?: string): SharedContractItem[] {
     const activeCustId = customerId || this.getActiveCustomerId();
+    if (cachedContracts.length > 0) {
+      const filtered = cachedContracts.filter((c) => !c.customerId || c.customerId === activeCustId);
+      return filtered.length > 0 ? filtered : cachedContracts;
+    }
+
     const profile = this.getActiveCustomerProfile(activeCustId);
     const myPlots = this.getMyPlots(activeCustId);
 

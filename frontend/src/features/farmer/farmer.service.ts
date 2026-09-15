@@ -88,7 +88,55 @@ export const farmerService = {
     return matched.length > 0 ? matched : allPlots;
   },
 
+  async updatePlotAsync(
+    plotId: string,
+    progress: number,
+    plantStatus: PlantGrowthStage
+  ): Promise<FarmerPlotItem> {
+    const allPlots = this.getAllPlots();
+    const index = allPlots.findIndex((p) => p.id === plotId);
+    if (index === -1) {
+      throw new Error("Không tìm thấy thửa đất.");
+    }
+    const plot = allPlots[index];
+
+    // If plot has an active contract, call Backend API: POST /api/v1/farming-logs
+    if (plot.contractId && plot.contractId !== "HD-NONE") {
+      try {
+        await apiClient.post("/farming-logs", {
+          maHopDong: plot.contractId,
+          maODat: plot.id,
+          hoatDong: "Cập nhật tiến độ canh tác",
+          giaiDoanCay: plantStatus,
+          tienDoPhanTram: progress,
+          moTa: `Kỹ sư canh tác cập nhật tiến độ sinh trưởng cây trồng đạt ${progress}%.`,
+        });
+      } catch (err) {
+        console.warn("Lỗi khi gửi nhật ký canh tác lên máy chủ:", err);
+      }
+    }
+
+    allPlots[index] = {
+      ...allPlots[index],
+      progress,
+      plantStatus,
+      lastUpdate: "Vừa xong",
+    };
+    serverPlots = allPlots;
+    notifyDataChanged("plot_updated", allPlots[index]);
+
+    // Also refresh latest server data
+    await this.fetchFarmerDataAsync().catch((err) => {
+      console.warn("fetchFarmerDataAsync error after updatePlotAsync:", err);
+    });
+
+    const updated = this.getAllPlots().find((p) => p.id === plotId) || allPlots[index];
+    return updated;
+  },
+
   updatePlot(plotId: string, progress: number, plantStatus: PlantGrowthStage): FarmerPlotItem {
+    this.updatePlotAsync(plotId, progress, plantStatus).catch(console.error);
+
     const allPlots = this.getAllPlots();
     const index = allPlots.findIndex((p) => p.id === plotId);
     if (index === -1) {
@@ -321,9 +369,20 @@ export const farmerService = {
           const relatedContract = serverContracts.find((c: any) => c.MaODat === p.MaODat);
           const isRented = p.TrangThai === "DANG_THUE";
 
+          // Find logs for this plot/contract
+          const plotLogs = (rawLogs || []).filter(
+            (l: any) => l.MaODat === p.MaODat || (relatedContract && l.MaHopDong === relatedContract.MaHopDong)
+          );
+          plotLogs.sort((a: any, b: any) => new Date(b.NgayGhi || b.CreatedAt || 0).getTime() - new Date(a.NgayGhi || a.CreatedAt || 0).getTime());
+          const latestLog = plotLogs[0];
+          const progress = latestLog?.TienDoPhanTram !== undefined ? Number(latestLog.TienDoPhanTram) : (isRented ? 45 : 0);
+          const plantStatus = (latestLog?.GiaiDoanCay as PlantGrowthStage) || (isRented ? "Phát triển tốt" : "Đang gieo trồng");
+          const engineerName = p.TenChuNongTrai || relatedContract?.TenChuNongTrai || "Lê Văn Canh Tác";
+
           return {
             id: p.MaODat,
             assignedFarmerId: p.MaChuNongTrai || activeFarmerId,
+            farmerName: engineerName,
             farmId: p.MaNongTrai,
             farmName: p.TenNongTrai || "Nông trại PlotFarm",
             plotCode: p.TenODat || p.MaODat,
@@ -333,9 +392,9 @@ export const farmerService = {
             plantCrop: relatedContract?.TenCayTrong || "Rau củ theo vụ",
             startDate: relatedContract?.NgayBatDau ? new Date(relatedContract.NgayBatDau).toLocaleDateString("vi-VN") : "01/01/2026",
             endDate: relatedContract?.NgayKetThuc ? new Date(relatedContract.NgayKetThuc).toLocaleDateString("vi-VN") : "01/06/2026",
-            plantStatus: isRented ? "Phát triển tốt" : "Đang gieo trồng",
-            progress: isRented ? 45 : 0,
-            lastUpdate: "Vừa xong",
+            plantStatus: plantStatus,
+            progress: progress,
+            lastUpdate: latestLog?.NgayGhi ? new Date(latestLog.NgayGhi).toLocaleDateString("vi-VN") : "Vừa xong",
             areaSquareMeter: Number(p.DienTich || 50),
             rentalPricePerMonth: Number(p.GiaThue || 2500000),
             sensorData: {

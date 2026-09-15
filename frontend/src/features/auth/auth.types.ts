@@ -24,6 +24,8 @@ export interface User {
   avatarUrl?: string;
   accountId?: string;
   userType?: "CUSTOMER" | "EMPLOYEE" | string;
+  phone?: string;
+  shippingAddress?: string;
 }
 
 export interface AuthResponse {

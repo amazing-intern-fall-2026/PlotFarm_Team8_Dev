@@ -28,40 +28,14 @@ export default function CustomerPlots({
     let mounted = true;
 
     async function loadLivePlots() {
-      const contracts = await customerService.fetchMyContractsAsync();
+      await Promise.all([
+        customerService.fetchMyContractsAsync(),
+        customerService.fetchFarmingLogsAsync(),
+      ]);
       if (!mounted) return;
 
-      if (contracts.length > 0) {
-        const livePlots: SharedPlotItem[] = contracts.map((c) => ({
-          id: c.plotId,
-          plotCode: c.plotCode,
-          farmId: "",
-          farmName: c.farmName,
-          assignedFarmerId: "",
-          farmerName: c.assignedFarmerName || "Kỹ sư canh tác PlotFarm",
-          plotStatus: "IN_USE",
-          customerId: c.customerId,
-          customerName: c.customerName,
-          contractId: c.id,
-          plantCrop: c.plantCrop,
-          startDate: c.startDate,
-          endDate: c.endDate,
-          plantStatus: "Phát triển tốt",
-          progress: 35,
-          lastUpdate: "Hệ thống IoT ghi nhận",
-          areaSquareMeter: 500,
-          rentalPricePerMonth: c.monthlyFee,
-          sensorData: {
-            moisture: 68,
-            temperature: 26.5,
-            soilPh: 6.5,
-            lightLux: 15000,
-            lastUpdated: "Thời gian thực (IoT)",
-          },
-          cameraFeedUrl: "https://images.unsplash.com/photo-1592417817098-8f3d6910985b?w=1200&auto=format&fit=crop&q=80",
-          plotThumbnail: "https://images.unsplash.com/photo-1592417817098-8f3d6910985b?w=600&auto=format&fit=crop&q=80",
-        }));
-
+      const livePlots = customerService.getMyPlots();
+      if (livePlots.length > 0) {
         setPlots(livePlots);
         setSelectedPlot((prev) => {
           if (!prev) return livePlots[0];
@@ -72,15 +46,15 @@ export default function CustomerPlots({
     }
     loadLivePlots();
 
-    function handleDataSync() {
+    async function handleDataSync() {
+      await customerService.fetchFarmingLogsAsync().catch(() => {});
       const updatedPlots = customerService.getMyPlots();
       setPlots(updatedPlots);
-      if (selectedPlot) {
-        const found = updatedPlots.find((p) => p.id === selectedPlot.id);
-        if (found) setSelectedPlot(found);
-      } else if (updatedPlots.length > 0) {
-        setSelectedPlot(updatedPlots[0]);
-      }
+      setSelectedPlot((prev) => {
+        if (!prev) return updatedPlots[0] || null;
+        const found = updatedPlots.find((p) => p.id === prev.id);
+        return found || updatedPlots[0] || null;
+      });
     }
 
     window.addEventListener("pf_data_changed", handleDataSync);
@@ -90,13 +64,18 @@ export default function CustomerPlots({
       window.removeEventListener("pf_data_changed", handleDataSync);
       window.removeEventListener("pf_farmer_changed", handleDataSync);
     };
-  }, [selectedPlot]);
+  }, []);
 
   // Farming logs for selected plot
   const plotLogs: SharedFarmingLogItem[] = selectedPlot
     ? customerService
         .getMyFarmingLogs()
-        .filter((l) => l.plot === selectedPlot.plotCode)
+        .filter(
+          (l) =>
+            l.plot === selectedPlot.plotCode ||
+            l.plotId === selectedPlot.id ||
+            (selectedPlot.contractId && l.contractId === selectedPlot.contractId)
+        )
     : [];
 
   function getGrowthBadge(stage: string) {

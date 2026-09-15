@@ -298,8 +298,79 @@ export async function fetchCurrentUser(): Promise<User> {
   const user = res.data?.user as User;
   if (user) {
     getActiveStorage().setItem(STORAGE_KEYS.USER, JSON.stringify(user));
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("pf_auth_changed", { detail: user }));
+    }
   }
   return user;
+}
+
+/**
+ * Update current user profile (persists to backend database)
+ */
+export async function updateProfile(data: {
+  fullName?: string;
+  phone?: string;
+  shippingAddress?: string;
+}): Promise<User> {
+  const token = getAccessToken();
+  if (!token) {
+    throw new Error("Không tìm thấy Access Token");
+  }
+
+  const response = await fetch(`${API_URL}/auth/profile`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) {
+    const errorData = await parseErrorResponse(response);
+    throw errorData;
+  }
+
+  const res = await response.json();
+  const updatedUser = res.data?.user as User;
+  if (updatedUser) {
+    getActiveStorage().setItem(STORAGE_KEYS.USER, JSON.stringify(updatedUser));
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("pf_auth_changed", { detail: updatedUser }));
+    }
+  }
+  return updatedUser;
+}
+
+/**
+ * Change current logged-in user password
+ */
+export async function changePassword(data: {
+  oldPassword: string;
+  newPassword: string;
+}): Promise<{ message: string }> {
+  const token = getAccessToken();
+  if (!token) {
+    throw new Error("Không tìm thấy Access Token");
+  }
+
+  const response = await fetch(`${API_URL}/auth/change-password`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) {
+    const errorData = await parseErrorResponse(response);
+    throw errorData;
+  }
+
+  const res = await response.json();
+  return { message: res.message || "Đổi mật khẩu thành công!" };
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -318,6 +389,9 @@ export function saveAuthSession(data: AuthResponse, rememberMe = true): void {
   }
   if (data.user) {
     storage.setItem(STORAGE_KEYS.USER, JSON.stringify(data.user));
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("pf_auth_changed", { detail: data.user }));
+    }
   }
   // Lưu lại lựa chọn để các hàm getter biết tìm ở đâu
   storage.setItem(STORAGE_KEYS.REMEMBER, rememberMe ? "1" : "0");
