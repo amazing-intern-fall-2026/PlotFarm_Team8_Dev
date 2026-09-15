@@ -19,20 +19,76 @@ const STORAGE_KEYS = {
   REMEMBER: "rememberMe",
 };
 
-// Predefined accounts matching seeded database
-export type DemoRoleKey = "farmer" | "farmer1" | "farmer2" | "farmer3" | "admin" | "customer" | "customer2";
+const LEGACY_STORAGE_KEYS = [
+  "token",
+  "user",
+  "pf_customer_contracts",
+  "pf_customer_profiles",
+  "pf_farmer_harvests",
+  "pf_farmer_logs",
+  "pf_farmer_plots",
+  "pf_farmer_profiles",
+  "pf_farmer_requests",
+  "pf_shared_farms",
+];
 
-export const TEST_ACCOUNTS: Record<string, { username: string; password: string; role: string; name: string }> = {
-  admin: { username: "admin", password: "admin123", role: "ADMIN", name: "Trần Quản Trị (Admin Toàn Quyền)" },
-  farmer: { username: "farmer", password: "farmer123", role: "FARMER", name: "Lê Văn Canh Tác (Nông Dân 1)" },
-  farmer1: { username: "farmer1", password: "farmer123", role: "FARMER", name: "Lê Văn Canh Tác (Nông Dân 1)" },
-  farmer2: { username: "farmer2", password: "farmer123", role: "FARMER", name: "Nguyễn Thị Đồng Ruộng (Nông Dân 2)" },
-  farmer3: { username: "farmer3", password: "farmer123", role: "FARMER", name: "Trần Văn Vườn (Nông Dân 3)" },
-  customer: { username: "customer", password: "customer123", role: "CUSTOMER", name: "Nguyễn Văn Nông (Có hợp đồng)" },
-  customer2: { username: "customer2", password: "customer123", role: "CUSTOMER", name: "Trần Thị Mai (Mới, sẵn sàng thuê)" },
-};
+// Clean legacy mock keys from localStorage on initialization
+if (typeof window !== "undefined") {
+  try {
+    for (const k of LEGACY_STORAGE_KEYS) {
+      localStorage.removeItem(k);
+      sessionStorage.removeItem(k);
+    }
+  } catch {
+    // Ignore storage access issues
+  }
+}
 
-export const DEMO_ACCOUNTS = TEST_ACCOUNTS;
+// ─────────────────────────────────────────────────────────────
+// Storage helpers: sessionStorage (không nhớ) vs localStorage (nhớ)
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Trả về storage đang lưu token.
+ * Ưu tiên sessionStorage trước (phiên hiện tại không ghi nhớ),
+ * rồi mới kiểm tra localStorage (phiên ghi nhớ lâu dài).
+ */
+function getActiveStorage(): Storage {
+  if (typeof window === "undefined") return localStorage;
+  if (sessionStorage.getItem(STORAGE_KEYS.TOKEN)) return sessionStorage;
+  return localStorage;
+}
+
+/**
+ * Chọn storage dựa trên lựa chọn "Ghi nhớ đăng nhập":
+ * - true  → localStorage  (còn sau khi đóng trình duyệt)
+ * - false → sessionStorage (mất khi đóng tab/trình duyệt)
+ */
+function pickStorage(rememberMe: boolean): Storage {
+  return rememberMe ? localStorage : sessionStorage;
+}
+
+// ─────────────────────────────────────────────────────────────
+// JWT expiry helpers
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Giải mã phần payload của JWT và kiểm tra trường `exp`.
+ * Trả về true nếu token đã hết hạn.
+ */
+function isTokenExpired(token: string): boolean {
+  try {
+    const base64Payload = token.split(".")[1];
+    if (!base64Payload) return true;
+    const padded = base64Payload.replace(/-/g, "+").replace(/_/g, "/");
+    const json = atob(padded);
+    const payload = JSON.parse(json) as { exp?: number };
+    if (!payload.exp) return false;
+    return payload.exp * 1000 < Date.now();
+  } catch {
+    return true;
+  }
+}
 
 // ─────────────────────────────────────────────────────────────
 // Network helpers
@@ -98,7 +154,7 @@ export async function login(credentials: LoginRequest, rememberMe = true): Promi
   const authData = result.data;
 
   // Save real JWT token and user details to localStorage
-  saveAuthSession(authData);
+  saveAuthSession(authData, rememberMe);
   return authData;
 }
 
@@ -227,12 +283,6 @@ export async function fetchCurrentUser(): Promise<User> {
     throw new Error("Không tìm thấy Access Token");
   }
 
-  // If running with mock demo token, return stored user
-  if (token.startsWith("mock-jwt-token")) {
-    const localUser = getCurrentUser();
-    if (localUser) return localUser;
-  }
-
   const response = await fetch(`${API_URL}/auth/me`, {
     headers: {
       Authorization: `Bearer ${token}`,
@@ -248,9 +298,81 @@ export async function fetchCurrentUser(): Promise<User> {
   const user = res.data?.user as User;
   if (user) {
     getActiveStorage().setItem(STORAGE_KEYS.USER, JSON.stringify(user));
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("pf_auth_changed", { detail: user }));
+    }
   }
   return user;
 }
+
+/**
+ * Update current user profile (persists to backend database)
+ */
+export async function updateProfile(data: {
+  fullName?: string;
+  phone?: string;
+  shippingAddress?: string;
+}): Promise<User> {
+  const token = getAccessToken();
+  if (!token) {
+    throw new Error("Không tìm thấy Access Token");
+  }
+
+  const response = await fetch(`${API_URL}/auth/profile`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) {
+    const errorData = await parseErrorResponse(response);
+    throw errorData;
+  }
+
+  const res = await response.json();
+  const updatedUser = res.data?.user as User;
+  if (updatedUser) {
+    getActiveStorage().setItem(STORAGE_KEYS.USER, JSON.stringify(updatedUser));
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("pf_auth_changed", { detail: updatedUser }));
+    }
+  }
+  return updatedUser;
+}
+
+/**
+ * Change current logged-in user password
+ */
+export async function changePassword(data: {
+  oldPassword: string;
+  newPassword: string;
+}): Promise<{ message: string }> {
+  const token = getAccessToken();
+  if (!token) {
+    throw new Error("Không tìm thấy Access Token");
+  }
+
+  const response = await fetch(`${API_URL}/auth/change-password`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) {
+    const errorData = await parseErrorResponse(response);
+    throw errorData;
+  }
+
+  const res = await response.json();
+  return { message: res.message || "Đổi mật khẩu thành công!" };
+}
+
 // ─────────────────────────────────────────────────────────────
 // Session management
 // ─────────────────────────────────────────────────────────────
@@ -267,6 +389,9 @@ export function saveAuthSession(data: AuthResponse, rememberMe = true): void {
   }
   if (data.user) {
     storage.setItem(STORAGE_KEYS.USER, JSON.stringify(data.user));
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("pf_auth_changed", { detail: data.user }));
+    }
   }
   // Lưu lại lựa chọn để các hàm getter biết tìm ở đâu
   storage.setItem(STORAGE_KEYS.REMEMBER, rememberMe ? "1" : "0");
@@ -301,9 +426,6 @@ export function isAuthenticated(): boolean {
   const token = getAccessToken();
   if (!token) return false;
 
-  // Mock demo tokens không có exp → luôn hợp lệ
-  if (token.startsWith("mock-jwt-token")) return true;
-
   if (isTokenExpired(token)) {
     // Token hết hạn → dọn session, bắt user đăng nhập lại
     logout();
@@ -321,11 +443,11 @@ export function logout(): void {
     localStorage.removeItem(key);
     sessionStorage.removeItem(key);
   }
-  // Xóa thêm các key tương thích ngược
-  localStorage.removeItem("token");
-  localStorage.removeItem("user");
-  sessionStorage.removeItem("token");
-  sessionStorage.removeItem("user");
+  // Xóa toàn bộ các key cũ
+  for (const key of LEGACY_STORAGE_KEYS) {
+    localStorage.removeItem(key);
+    sessionStorage.removeItem(key);
+  }
 }
 
 /**

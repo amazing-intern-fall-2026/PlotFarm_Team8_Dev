@@ -79,11 +79,15 @@ const BASE_SELECT = `
         KH.TenKH, KH.Email, KH.DienThoai,
         OD.TenODat, OD.DienTich,
         NT.TenNongTrai, NT.DiaChi AS DiaChiNongTrai, NT.MaChuNongTrai,
+        LTRIM(RTRIM(NV.Ho + ' ' + NV.Ten)) AS TenChuNongTrai,
+        NV.Email AS EmailChuNongTrai,
+        NV.DienThoai AS DienThoaiChuNongTrai,
         CT.TenCayTrong, CT.LoaiCay, CT.ThoiGianThuHoach
     FROM dbo.HOPDONGTHUE HD
     JOIN dbo.KHACHHANG   KH ON HD.MaKH       = KH.MaKH
     JOIN dbo.ODAT        OD ON HD.MaODat      = OD.MaODat
     JOIN dbo.NONGTRAI    NT ON OD.MaNongTrai  = NT.MaNongTrai
+    LEFT JOIN dbo.NHANVIEN NV ON NT.MaChuNongTrai = NV.MaNV
     JOIN dbo.CAYTRONG    CT ON HD.MaCayTrong  = CT.MaCayTrong
 `;
 

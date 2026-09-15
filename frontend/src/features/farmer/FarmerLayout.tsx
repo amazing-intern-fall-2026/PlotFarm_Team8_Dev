@@ -2,7 +2,9 @@ import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { getCurrentUser } from "../auth/auth.api";
 import { useAuth } from "../auth/AuthContext";
-import { Sidebar, type SidebarMenuItem } from "../../components/layout";
+import { Sidebar, UserDropdownMenu, type SidebarMenuItem } from "../../components/layout";
+import ChangePasswordModal from "../auth/ChangePasswordModal";
+import FarmerNotificationBell from "./FarmerNotificationBell";
 import FarmerDashboard from "./FarmerDashboard";
 import FarmerPlots from "./FarmerPlots";
 import FarmerLogs from "./FarmerLogs";
@@ -23,6 +25,7 @@ export default function FarmerLayout() {
   const [activeProfile, setActiveProfile] = useState<FarmerProfileData>(() =>
     farmerService.getFarmerProfile(),
   );
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
   const [, setTick] = useState(0);
 
   // Sync state whenever farmer is switched or data changed
@@ -123,6 +126,7 @@ export default function FarmerLayout() {
         }
         onLogout={handleLogout}
         logoutText="Đăng xuất"
+        onUserProfileClick={() => handleTabChange("profile")}
       />
 
       {/* Main Content Area */}
@@ -138,20 +142,30 @@ export default function FarmerLayout() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2 text-xs">
+          <div className="flex items-center gap-3">
+            {/* Real-time Notification Bell for Farmer */}
+            <FarmerNotificationBell
+              onNavigate={(tab) => handleTabChange(tab)}
+            />
 
-            <button
-              type="button"
-              onClick={() => handleTabChange("profile")}
-              className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition cursor-pointer text-xs"
-              title="Xem Hồ sơ Nông Dân"
-            >
-              <span className="h-2 w-2 rounded-full bg-emerald-500 inline-block" />
-              <span className="font-semibold text-gray-700 hidden sm:inline">
-                {activeProfile.name}
-              </span>
-              <span className="text-xs text-emerald-700">⚙️</span>
-            </button>
+            {/* Polished User Dropdown Menu */}
+            <UserDropdownMenu
+              user={{
+                name: user?.fullName || activeProfile.name || "Kỹ Sư Nông Dân",
+                username: user?.username,
+                email: user?.email,
+                phone: (user as any)?.phone || activeProfile.phone,
+                roleBadge: "Kỹ Sư Canh Tác",
+                roleTitle: "Kỹ Sư Nông Nghiệp",
+                avatarText: activeProfile.avatarIcon || "👨‍🌾",
+                avatarBg: "bg-emerald-700 text-white",
+              }}
+              theme="emerald"
+              isActiveProfile={activeTab === "profile"}
+              onProfileClick={() => handleTabChange("profile")}
+              onChangePasswordClick={() => setIsChangePasswordOpen(true)}
+              onLogout={handleLogout}
+            />
           </div>
         </header>
 
@@ -172,6 +186,13 @@ export default function FarmerLayout() {
           {activeTab === "profile" && <FarmerProfile />}
         </main>
       </div>
+
+      {/* Change Password Modal accessible directly from header */}
+      <ChangePasswordModal
+        isOpen={isChangePasswordOpen}
+        onClose={() => setIsChangePasswordOpen(false)}
+        userEmailOrName={user?.fullName || activeProfile.name}
+      />
     </div>
   );
 }

@@ -112,8 +112,11 @@ export const loginUser = async ({ username, password }) => {
     user: {
       id: userInfo.id,
       accountId: account.TenDangNhap,
+      username: account.TenDangNhap,
       fullName: userInfo.fullName,
       email: userInfo.email,
+      phone: userInfo.phone || '',
+      shippingAddress: userInfo.shippingAddress || '',
       userType: userInfo.type,
       role: account.MaVaiTro,
     },
@@ -124,23 +127,102 @@ export const loginUser = async ({ username, password }) => {
 const getUserInfoByAccount = async (account) => {
   if (account.MaKH) {
     const cust = await authRepo.getCustomerById(account.MaKH);
-    return { id: cust.id, fullName: cust.fullName, email: cust.email, type: 'CUSTOMER' };
+    return {
+      id: cust.id,
+      fullName: cust.fullName,
+      email: cust.email,
+      phone: cust.phone || '',
+      shippingAddress: cust.shippingAddress || '',
+      type: 'CUSTOMER',
+    };
   }
   const emp = await authRepo.getEmployeeById(account.MaNV);
-  return { id: emp.id, fullName: emp.fullName, email: emp.email, type: 'EMPLOYEE' };
+  return {
+    id: emp.id,
+    fullName: emp.fullName,
+    email: emp.email,
+    phone: emp.phone || '',
+    type: 'EMPLOYEE',
+  };
 };
 
 /** Get current user based on JWT payload */
 export const getCurrentUser = async (payload) => {
-  const { userId, userType } = payload;
+  const { userId, userType, accountId } = payload;
   if (userType === 'CUSTOMER') {
     const cust = await authRepo.getCustomerById(userId);
     if (!cust) return null;
-    return { ...cust, userType, role: payload.role };
+    return {
+      ...cust,
+      username: cust.username || accountId,
+      userType,
+      role: payload.role,
+    };
   }
   const emp = await authRepo.getEmployeeById(userId);
   if (!emp) return null;
-  return { ...emp, userType, role: payload.role };
+  return {
+    ...emp,
+    username: emp.username || accountId,
+    userType,
+    role: payload.role,
+  };
+};
+
+/** Update current user's profile */
+export const updateUserProfile = async (payload, authUser) => {
+  const { fullName, phone, shippingAddress } = payload;
+  const { userId, userType } = authUser;
+
+  if (userType === 'CUSTOMER') {
+    const success = await authRepo.updateCustomerProfile(userId, {
+      fullName: (fullName || '').trim(),
+      phone: (phone || '').trim(),
+      shippingAddress: (shippingAddress || '').trim(),
+    });
+    if (!success) {
+      throw new AppError('Không thể cập nhật hồ sơ khách hàng. Vui lòng thử lại sau.', 500);
+    }
+  } else {
+    // EMPLOYEE (ADMIN, FARMER)
+    const success = await authRepo.updateEmployeeProfile(userId, {
+      fullName: (fullName || '').trim(),
+      phone: (phone || '').trim(),
+    });
+    if (!success) {
+      throw new AppError('Không thể cập nhật hồ sơ nhân viên. Vui lòng thử lại sau.', 500);
+    }
+  }
+
+  // Fetch updated user
+  const updatedUser = await getCurrentUser(authUser);
+  return updatedUser;
+};
+
+/** Change password for logged-in user */
+export const changeUserPassword = async ({ oldPassword, newPassword }, authUser) => {
+  const username = authUser.accountId;
+  const account = await authRepo.findAccountByUsername(username);
+  if (!account) {
+    throw new AppError('Tài khoản không tồn tại', 404);
+  }
+
+  const isMatch = await bcrypt.compare(oldPassword, account.MatKhauHash);
+  if (!isMatch) {
+    throw new AppError('Mật khẩu hiện tại không chính xác', 400);
+  }
+
+  if (oldPassword === newPassword) {
+    throw new AppError('Mật khẩu mới không được trùng với mật khẩu hiện tại', 400);
+  }
+
+  const newPasswordHash = await bcrypt.hash(newPassword, BCRYPT_SALT_ROUNDS);
+  const updated = await authRepo.updateAccountPassword(username, newPasswordHash);
+  if (!updated) {
+    throw new AppError('Không thể đổi mật khẩu. Vui lòng thử lại sau.', 500);
+  }
+
+  return { message: 'Đổi mật khẩu thành công!' };
 };
 
 /** Helper to mask email for privacy display */

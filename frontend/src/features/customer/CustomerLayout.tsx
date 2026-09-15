@@ -1,14 +1,16 @@
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { getCurrentUser } from "../auth/auth.api";
+import { getCurrentUser, fetchCurrentUser } from "../auth/auth.api";
 import { useAuth } from "../auth/AuthContext";
-import { Sidebar, type SidebarMenuItem } from "../../components/layout";
+import { Sidebar, UserDropdownMenu, type SidebarMenuItem } from "../../components/layout";
+import ChangePasswordModal from "../auth/ChangePasswordModal";
 import CustomerDashboard from "./CustomerDashboard";
 import CustomerPlots from "./CustomerPlots";
 import CustomerLogs from "./CustomerLogs";
 import CustomerRequests from "./CustomerRequests";
 import CustomerHarvest from "./CustomerHarvest";
 import FarmListPage from "./FarmListPage";
+import CustomerProfile from "./CustomerProfile";
 import { customerService } from "./customer.service";
 import type { CustomerTab, SharedCustomerProfile } from "./customer.types";
 
@@ -16,11 +18,14 @@ export default function CustomerLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user: authUser, logout: authLogout } = useAuth();
-  const user = authUser || getCurrentUser();
+  const [currentUser, setCurrentUser] = useState(() => authUser || getCurrentUser());
+  const user = currentUser;
 
   const [activeCustomer, setActiveCustomer] = useState<SharedCustomerProfile>(() =>
     customerService.getActiveCustomerProfile(),
   );
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [, setSyncKey] = useState(0);
 
   // Sync state whenever customer or data changes
   useEffect(() => {
@@ -28,12 +33,16 @@ export default function CustomerLayout() {
     async function initLayoutData() {
       try {
         await Promise.all([
+          fetchCurrentUser().catch(() => null),
           customerService.fetchMyContractsAsync(),
+          customerService.fetchFarmingLogsAsync(),
           customerService.fetchMyCareRequestsAsync(),
           customerService.fetchMyHarvestsAsync(),
         ]);
         if (isMounted) {
+          setCurrentUser(getCurrentUser());
           setActiveCustomer(customerService.getActiveCustomerProfile());
+          setSyncKey((prev) => prev + 1);
         }
       } catch (err) {
         console.warn("Lỗi khi tải dữ liệu badge:", err);
@@ -42,14 +51,18 @@ export default function CustomerLayout() {
     initLayoutData();
 
     function handleSync() {
+      setCurrentUser(getCurrentUser());
       setActiveCustomer(customerService.getActiveCustomerProfile());
+      setSyncKey((prev) => prev + 1);
     }
     window.addEventListener("pf_data_changed", handleSync);
     window.addEventListener("pf_farmer_changed", handleSync);
+    window.addEventListener("pf_auth_changed", handleSync);
     return () => {
       isMounted = false;
       window.removeEventListener("pf_data_changed", handleSync);
       window.removeEventListener("pf_farmer_changed", handleSync);
+      window.removeEventListener("pf_auth_changed", handleSync);
     };
   }, []);
 
@@ -61,6 +74,7 @@ export default function CustomerLayout() {
     if (path.includes("/customer/requests")) return "requests";
     if (path.includes("/customer/harvest")) return "harvest";
     if (path.includes("/customer/farms")) return "farms";
+    if (path.includes("/customer/profile")) return "profile";
     return "dashboard";
   })();
 
@@ -116,6 +130,7 @@ export default function CustomerLayout() {
       badge: pendingHarvestsCount > 0 ? `${pendingHarvestsCount} vụ` : undefined,
     },
     { id: "farms", label: "Khám phá Nông trại", icon: "🏡" },
+    { id: "profile", label: "Hồ sơ Khách Hàng", icon: "👤" },
   ];
 
   return (
@@ -145,6 +160,7 @@ export default function CustomerLayout() {
         }
         onLogout={handleLogout}
         logoutText="Đăng xuất"
+        onUserProfileClick={() => handleTabChange("profile")}
       />
 
       {/* Main Content Area */}
@@ -160,6 +176,26 @@ export default function CustomerLayout() {
             </p>
           </div>
 
+          <div className="flex items-center gap-3">
+            {/* Polished User Dropdown Menu */}
+            <UserDropdownMenu
+              user={{
+                name: user?.fullName || activeCustomer.name || user?.username || "Khách Hàng",
+                username: user?.username,
+                email: user?.email || activeCustomer.email,
+                phone: (user as any)?.phone || activeCustomer.phone,
+                roleBadge: "Khách Hàng Thành Viên",
+                roleTitle: "Khách Hàng • Hồ sơ",
+                avatarText: activeCustomer.avatarIcon || (user?.fullName ? user.fullName.slice(0, 2).toUpperCase() : "KH"),
+                avatarBg: "bg-linear-to-tr from-emerald-600 to-teal-400 text-white",
+              }}
+              theme="emerald"
+              isActiveProfile={activeTab === "profile"}
+              onProfileClick={() => handleTabChange("profile")}
+              onChangePasswordClick={() => setIsPasswordModalOpen(true)}
+              onLogout={handleLogout}
+            />
+          </div>
         </header>
 
         {/* Content Body */}
@@ -189,11 +225,26 @@ export default function CustomerLayout() {
           {activeTab === "farms" && (
             <FarmListPage
               isEmbedded={true}
-              onSelectFarm={(farmId) => navigate(`/customer/farms/${farmId}`)}
+              onSelectFarm={(farmId: string) => navigate(`/customer/farms/${farmId}`)}
+            />
+          )}
+
+          {activeTab === "profile" && (
+            <CustomerProfile
+              onNavigatePlots={() => handleTabChange("plots")}
+              onNavigateRequests={() => handleTabChange("requests")}
+              onLogout={handleLogout}
             />
           )}
         </main>
       </div>
+
+      {/* Change Password Modal accessible directly from header */}
+      <ChangePasswordModal
+        isOpen={isPasswordModalOpen}
+        onClose={() => setIsPasswordModalOpen(false)}
+        userEmailOrName={user?.fullName || activeCustomer.name || user?.email}
+      />
     </div>
   );
 }

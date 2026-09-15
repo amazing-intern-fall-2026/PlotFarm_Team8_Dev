@@ -108,20 +108,89 @@ export const findAccountByUsername = async (username, transaction) => {
   return result.recordset[0];
 };
 
-/** Get customer profile */
+/** Get customer profile with full contact info and account username */
 export const getCustomerById = async (id, transaction) => {
   const request = new sql.Request(transaction || getPool());
   request.input('id', sql.VarChar, id);
-  const result = await request.query(`SELECT MaKH AS id, TenKH AS fullName, Email AS email FROM dbo.KHACHHANG WHERE MaKH = @id`);
+  const result = await request.query(`
+    SELECT 
+      k.MaKH AS id, 
+      k.TenKH AS fullName, 
+      k.Email AS email,
+      k.DienThoai AS phone,
+      k.DiaChi AS shippingAddress,
+      k.TrangThai AS status,
+      t.TenDangNhap AS username,
+      t.MaVaiTro AS role
+    FROM dbo.KHACHHANG k
+    LEFT JOIN dbo.TAIKHOAN t ON t.MaKH = k.MaKH
+    WHERE k.MaKH = @id
+  `);
   return result.recordset[0];
 };
 
-/** Get employee profile */
+/** Get employee profile with full contact info and account username */
 export const getEmployeeById = async (id, transaction) => {
   const request = new sql.Request(transaction || getPool());
   request.input('id', sql.VarChar, id);
-  const result = await request.query(`SELECT MaNV AS id, LTRIM(RTRIM(CONCAT(Ho, ' ', Ten))) AS fullName, Email AS email FROM dbo.NHANVIEN WHERE MaNV = @id`);
+  const result = await request.query(`
+    SELECT 
+      n.MaNV AS id, 
+      LTRIM(RTRIM(CONCAT(n.Ho, ' ', n.Ten))) AS fullName, 
+      n.Email AS email,
+      n.DienThoai AS phone,
+      n.ChucVu AS employeeRole,
+      n.TrangThai AS status,
+      t.TenDangNhap AS username,
+      t.MaVaiTro AS role
+    FROM dbo.NHANVIEN n
+    LEFT JOIN dbo.TAIKHOAN t ON t.MaNV = n.MaNV
+    WHERE n.MaNV = @id
+  `);
   return result.recordset[0];
+};
+
+/** Update customer profile in database */
+export const updateCustomerProfile = async (id, { fullName, phone, shippingAddress }, transaction) => {
+  const request = new sql.Request(transaction || getPool());
+  request.input('id', sql.VarChar, id);
+  request.input('fullName', sql.NVarChar, fullName);
+  request.input('phone', sql.VarChar, phone);
+  request.input('shippingAddress', sql.NVarChar, shippingAddress);
+  const query = `
+    UPDATE dbo.KHACHHANG
+    SET TenKH = @fullName,
+        DienThoai = @phone,
+        DiaChi = @shippingAddress,
+        UpdatedAt = SYSUTCDATETIME()
+    WHERE MaKH = @id
+  `;
+  const result = await request.query(query);
+  return result.rowsAffected[0] > 0;
+};
+
+/** Update employee profile in database */
+export const updateEmployeeProfile = async (id, { fullName, phone }, transaction) => {
+  const trimmedName = (fullName || '').trim();
+  const parts = trimmedName.split(/\s+/);
+  const ho = parts.length > 1 ? parts.slice(0, -1).join(' ') : '';
+  const ten = parts.length > 1 ? parts[parts.length - 1] : parts[0] || '';
+
+  const request = new sql.Request(transaction || getPool());
+  request.input('id', sql.VarChar, id);
+  request.input('ho', sql.NVarChar, ho);
+  request.input('ten', sql.NVarChar, ten);
+  request.input('phone', sql.VarChar, phone);
+  const query = `
+    UPDATE dbo.NHANVIEN
+    SET Ho = @ho,
+        Ten = @ten,
+        DienThoai = @phone,
+        UpdatedAt = SYSUTCDATETIME()
+    WHERE MaNV = @id
+  `;
+  const result = await request.query(query);
+  return result.rowsAffected[0] > 0;
 };
 
 /** Find account and linked contact (email, fullName) by username or email */
