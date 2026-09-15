@@ -252,6 +252,34 @@ export async function fetchCurrentUser(): Promise<User> {
   return user;
 }
 // ─────────────────────────────────────────────────────────────
+// Storage helpers
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Pick the appropriate storage based on rememberMe flag.
+ * rememberMe=true → localStorage, rememberMe=false → sessionStorage
+ */
+function pickStorage(rememberMe: boolean): Storage {
+  return rememberMe ? localStorage : sessionStorage;
+}
+
+/**
+ * Return the active storage based on what the user chose at login.
+ * Falls back to localStorage if the REMEMBER key is not set.
+ */
+function getActiveStorage(): Storage {
+  // Check sessionStorage first (shorter lifetime takes precedence)
+  const inSession = sessionStorage.getItem(STORAGE_KEYS.REMEMBER);
+  if (inSession !== null) {
+    return inSession === "1" ? localStorage : sessionStorage;
+  }
+  // Fall back to localStorage
+  const inLocal = localStorage.getItem(STORAGE_KEYS.REMEMBER);
+  if (inLocal === "0") return sessionStorage;
+  return localStorage;
+}
+
+// ─────────────────────────────────────────────────────────────
 // Session management
 // ─────────────────────────────────────────────────────────────
 
@@ -292,6 +320,22 @@ export function getAccessToken(): string | null {
 }
 
 
+
+/**
+ * Kiểm tra JWT token đã hết hạn chưa bằng cách decode phần payload.
+ * Trả về true nếu token hết hạn hoặc không parse được.
+ */
+function isTokenExpired(token: string): boolean {
+  try {
+    const payloadBase64 = token.split(".")[1];
+    if (!payloadBase64) return true;
+    const payload = JSON.parse(atob(payloadBase64));
+    if (!payload.exp) return false; // Không có exp → không hết hạn
+    return Date.now() >= payload.exp * 1000;
+  } catch {
+    return true; // Không parse được → coi như hết hạn
+  }
+}
 
 /**
  * Kiểm tra user đã đăng nhập và token chưa hết hạn.
