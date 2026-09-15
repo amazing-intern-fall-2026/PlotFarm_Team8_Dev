@@ -19,20 +19,30 @@ const STORAGE_KEYS = {
   REMEMBER: "rememberMe",
 };
 
-// Predefined accounts matching seeded database
-export type DemoRoleKey = "farmer" | "farmer1" | "farmer2" | "farmer3" | "admin" | "customer" | "customer2";
+const LEGACY_STORAGE_KEYS = [
+  "token",
+  "user",
+  "pf_customer_contracts",
+  "pf_customer_profiles",
+  "pf_farmer_harvests",
+  "pf_farmer_logs",
+  "pf_farmer_plots",
+  "pf_farmer_profiles",
+  "pf_farmer_requests",
+  "pf_shared_farms",
+];
 
-export const TEST_ACCOUNTS: Record<string, { username: string; password: string; role: string; name: string }> = {
-  admin: { username: "admin", password: "admin123", role: "ADMIN", name: "Trần Quản Trị (Admin Toàn Quyền)" },
-  farmer: { username: "farmer", password: "farmer123", role: "FARMER", name: "Lê Văn Canh Tác (Nông Dân 1)" },
-  farmer1: { username: "farmer1", password: "farmer123", role: "FARMER", name: "Lê Văn Canh Tác (Nông Dân 1)" },
-  farmer2: { username: "farmer2", password: "farmer123", role: "FARMER", name: "Nguyễn Thị Đồng Ruộng (Nông Dân 2)" },
-  farmer3: { username: "farmer3", password: "farmer123", role: "FARMER", name: "Trần Văn Vườn (Nông Dân 3)" },
-  customer: { username: "customer", password: "customer123", role: "CUSTOMER", name: "Nguyễn Văn Nông (Có hợp đồng)" },
-  customer2: { username: "customer2", password: "customer123", role: "CUSTOMER", name: "Trần Thị Mai (Mới, sẵn sàng thuê)" },
-};
-
-export const DEMO_ACCOUNTS = TEST_ACCOUNTS;
+// Clean legacy mock keys from localStorage on initialization
+if (typeof window !== "undefined") {
+  try {
+    for (const k of LEGACY_STORAGE_KEYS) {
+      localStorage.removeItem(k);
+      sessionStorage.removeItem(k);
+    }
+  } catch {
+    // Ignore storage access issues
+  }
+}
 
 // ─────────────────────────────────────────────────────────────
 // Storage helpers: sessionStorage (không nhớ) vs localStorage (nhớ)
@@ -273,12 +283,6 @@ export async function fetchCurrentUser(): Promise<User> {
     throw new Error("Không tìm thấy Access Token");
   }
 
-  // If running with mock demo token, return stored user
-  if (token.startsWith("mock-jwt-token")) {
-    const localUser = getCurrentUser();
-    if (localUser) return localUser;
-  }
-
   const response = await fetch(`${API_URL}/auth/me`, {
     headers: {
       Authorization: `Bearer ${token}`,
@@ -346,9 +350,6 @@ export function isAuthenticated(): boolean {
   const token = getAccessToken();
   if (!token) return false;
 
-  // Mock demo tokens không có exp → luôn hợp lệ
-  if (token.startsWith("mock-jwt-token")) return true;
-
   if (isTokenExpired(token)) {
     // Token hết hạn → dọn session, bắt user đăng nhập lại
     logout();
@@ -366,11 +367,11 @@ export function logout(): void {
     localStorage.removeItem(key);
     sessionStorage.removeItem(key);
   }
-  // Xóa thêm các key tương thích ngược
-  localStorage.removeItem("token");
-  localStorage.removeItem("user");
-  sessionStorage.removeItem("token");
-  sessionStorage.removeItem("user");
+  // Xóa toàn bộ các key cũ
+  for (const key of LEGACY_STORAGE_KEYS) {
+    localStorage.removeItem(key);
+    sessionStorage.removeItem(key);
+  }
 }
 
 /**
