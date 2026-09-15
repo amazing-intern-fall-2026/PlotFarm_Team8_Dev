@@ -35,6 +35,52 @@ export const TEST_ACCOUNTS: Record<string, { username: string; password: string;
 export const DEMO_ACCOUNTS = TEST_ACCOUNTS;
 
 // ─────────────────────────────────────────────────────────────
+// Storage helpers: sessionStorage (không nhớ) vs localStorage (nhớ)
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Trả về storage đang lưu token.
+ * Ưu tiên sessionStorage trước (phiên hiện tại không ghi nhớ),
+ * rồi mới kiểm tra localStorage (phiên ghi nhớ lâu dài).
+ */
+function getActiveStorage(): Storage {
+  if (typeof window === "undefined") return localStorage;
+  if (sessionStorage.getItem(STORAGE_KEYS.TOKEN)) return sessionStorage;
+  return localStorage;
+}
+
+/**
+ * Chọn storage dựa trên lựa chọn "Ghi nhớ đăng nhập":
+ * - true  → localStorage  (còn sau khi đóng trình duyệt)
+ * - false → sessionStorage (mất khi đóng tab/trình duyệt)
+ */
+function pickStorage(rememberMe: boolean): Storage {
+  return rememberMe ? localStorage : sessionStorage;
+}
+
+// ─────────────────────────────────────────────────────────────
+// JWT expiry helpers
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Giải mã phần payload của JWT và kiểm tra trường `exp`.
+ * Trả về true nếu token đã hết hạn.
+ */
+function isTokenExpired(token: string): boolean {
+  try {
+    const base64Payload = token.split(".")[1];
+    if (!base64Payload) return true;
+    const padded = base64Payload.replace(/-/g, "+").replace(/_/g, "/");
+    const json = atob(padded);
+    const payload = JSON.parse(json) as { exp?: number };
+    if (!payload.exp) return false;
+    return payload.exp * 1000 < Date.now();
+  } catch {
+    return true;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
 // Network helpers
 // ─────────────────────────────────────────────────────────────
 
@@ -98,7 +144,7 @@ export async function login(credentials: LoginRequest, rememberMe = true): Promi
   const authData = result.data;
 
   // Save real JWT token and user details to localStorage
-  saveAuthSession(authData);
+  saveAuthSession(authData, rememberMe);
   return authData;
 }
 
