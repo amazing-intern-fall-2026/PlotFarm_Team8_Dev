@@ -405,6 +405,40 @@ export async function fetchCurrentUser(): Promise<User> {
 }
 
 // ─────────────────────────────────────────────────────────────
+// Storage helpers
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Chọn storage phù hợp dựa vào tùy chọn rememberMe
+ * rememberMe=true → localStorage, rememberMe=false → sessionStorage
+ */
+function pickStorage(rememberMe: boolean): Storage {
+  return rememberMe ? localStorage : sessionStorage;
+}
+
+/**
+ * Lấy storage đang được dùng, dựa vào flag "rememberMe" đã lưu trước đó.
+ * Ưu tiên kiểm tra localStorage trước, rồi mới tới sessionStorage.
+ */
+function getActiveStorage(): Storage {
+  // Kiểm tra localStorage có flag "rememberMe" không
+  const lsRemember = localStorage.getItem(STORAGE_KEYS.REMEMBER);
+  if (lsRemember !== null) {
+    return lsRemember === "1" ? localStorage : sessionStorage;
+  }
+  // Kiểm tra sessionStorage (trường hợp rememberMe=false)
+  const ssRemember = sessionStorage.getItem(STORAGE_KEYS.REMEMBER);
+  if (ssRemember !== null) {
+    return sessionStorage;
+  }
+  // Fallback: kiểm tra nếu token tồn tại ở đâu
+  if (localStorage.getItem(STORAGE_KEYS.TOKEN)) return localStorage;
+  if (sessionStorage.getItem(STORAGE_KEYS.TOKEN)) return sessionStorage;
+  // Mặc định dùng localStorage
+  return localStorage;
+}
+
+// ─────────────────────────────────────────────────────────────
 // Session management
 // ─────────────────────────────────────────────────────────────
 
@@ -442,6 +476,22 @@ export function getCurrentUser(): User | null {
  */
 export function getAccessToken(): string | null {
   return getActiveStorage().getItem(STORAGE_KEYS.TOKEN);
+}
+
+/**
+ * Kiểm tra JWT token đã hết hạn chưa bằng cách decode phần payload.
+ * Trả về true nếu token hết hạn hoặc không hợp lệ.
+ */
+function isTokenExpired(token: string): boolean {
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return true;
+    const payload = JSON.parse(atob(parts[1]));
+    if (!payload.exp) return false; // Không có exp → coi như không hết hạn
+    return Date.now() >= payload.exp * 1000;
+  } catch {
+    return true; // Nếu parse lỗi → coi như hết hạn
+  }
 }
 
 /**
