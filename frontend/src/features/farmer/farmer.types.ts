@@ -5,6 +5,9 @@ export type PlantGrowthStage =
   | "Phát triển tốt"
   | "Đang ra hoa"
   | "Chuẩn bị thu hoạch"
+  | "Giai đoạn thu hoạch"
+  | "Đã thu hoạch"
+  | "Đã giao hàng"
   | "Cần chú ý chăm sóc";
 
 export interface FarmerPlotItem {
@@ -35,6 +38,9 @@ export interface FarmerPlotItem {
   };
   cameraFeedUrl?: string;
   plotThumbnail?: string;
+  harvestId?: string;
+  harvestStatus?: HarvestStatus;
+  deliveryStatus?: DeliveryStatus;
 }
 
 export interface FarmingLogItem {

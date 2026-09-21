@@ -82,6 +82,7 @@ export default function AdminContracts() {
     );
   });
 
+  const pendingCount = contracts.filter((c) => c.TrangThai === 'PENDING').length;
   const activeCount = contracts.filter((c) => c.TrangThai === 'ACTIVE').length;
   const completedCount = contracts.filter((c) => c.TrangThai === 'COMPLETED').length;
   const totalValue = contracts.reduce((acc, c) => acc + (Number(c.TongTien) || 0), 0);
@@ -102,7 +103,15 @@ export default function AdminContracts() {
 
 
       {/* Header Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+        <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-4 shadow-xs">
+          <span className="text-2xs font-semibold uppercase tracking-wider text-amber-700">
+            Chờ thanh toán (PENDING)
+          </span>
+          <p className="text-xl font-bold text-amber-600 mt-1">{pendingCount} Hợp đồng</p>
+          <span className="text-2xs text-gray-500">Đang chờ khách chuyển khoản</span>
+        </div>
+
         <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-xs">
           <span className="text-2xs font-semibold uppercase tracking-wider text-gray-400">
             Hợp đồng đang hiệu lực
@@ -156,6 +165,7 @@ export default function AdminContracts() {
               className="text-xs rounded-lg border border-gray-300 py-1.5 px-2.5 bg-white text-gray-700 focus:outline-indigo-500"
             >
               <option value="ALL">Tất cả trạng thái</option>
+              <option value="PENDING">Chờ thanh toán (PENDING)</option>
               <option value="ACTIVE">Đang thuê (ACTIVE)</option>
               <option value="COMPLETED">Hoàn tất (COMPLETED)</option>
               <option value="CANCELLED">Đã hủy (CANCELLED)</option>
@@ -232,7 +242,7 @@ export default function AdminContracts() {
 
                     {/* Deposit */}
                     <td className="px-4 py-3 font-medium text-amber-700">
-                      {formatCurrency(c.depositAmount)}
+                      {formatCurrency(c.depositAmount || 0)}
                     </td>
 
                     {/* Total Amount */}
@@ -246,13 +256,15 @@ export default function AdminContracts() {
                         variant={
                           c.TrangThai === 'ACTIVE'
                             ? 'success'
+                            : c.TrangThai === 'PENDING'
+                            ? 'warning'
                             : c.TrangThai === 'COMPLETED'
                             ? 'indigo'
                             : 'neutral'
                         }
                         size="sm"
                       >
-                        {c.TrangThai}
+                        {c.TrangThai === 'PENDING' ? 'Chờ thanh toán' : c.TrangThai}
                       </Badge>
                     </td>
 

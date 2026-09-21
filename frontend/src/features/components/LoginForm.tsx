@@ -11,6 +11,7 @@ import {
   type LoginFormErrors,
 } from "../auth/auth.validation";
 import { Button, Input, Alert } from "../../components/ui";
+import FarmerRegisterModal from "../auth/FarmerRegisterModal";
 
 interface LoginFormProps {
   onSwitchToRegister?: () => void;
@@ -39,6 +40,7 @@ export default function LoginForm({
   } | null>(null);
   const [loading, setLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
+  const [isFarmerModalOpen, setIsFarmerModalOpen] = useState(false);
 
   function handleChange(field: keyof LoginRequest, value: string) {
     setForm((prev) => ({
@@ -245,6 +247,22 @@ export default function LoginForm({
           </button>
         </div>
       )}
+
+      {/* Farmer Partner Application Banner */}
+      <div className="pt-2 border-t border-gray-100 text-center">
+        <button
+          type="button"
+          onClick={() => setIsFarmerModalOpen(true)}
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-3 py-2 rounded-xl transition cursor-pointer w-full justify-center shadow-2xs"
+        >
+          <span>🚜</span> Bạn muốn trở thành Nông dân đối tác? <strong className="underline ml-1">Đăng ký xét duyệt ➔</strong>
+        </button>
+      </div>
+
+      <FarmerRegisterModal
+        isOpen={isFarmerModalOpen}
+        onClose={() => setIsFarmerModalOpen(false)}
+      />
     </div>
   );
 }

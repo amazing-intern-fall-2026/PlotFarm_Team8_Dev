@@ -10,10 +10,22 @@ export const getAllPlots = async (filters = {}) => {
         SELECT OD.*, NT.TenNongTrai, NT.MaChuNongTrai,
                LTRIM(RTRIM(NV.Ho + ' ' + NV.Ten)) AS TenChuNongTrai,
                NV.Email AS EmailChuNongTrai,
-               NV.DienThoai AS DienThoaiChuNongTrai
+               NV.DienThoai AS DienThoaiChuNongTrai,
+               HC.MaHopDong, HC.MaKH, HC.TenKH, HC.EmailKH, HC.DienThoaiKH,
+               HC.TenCayTrong, HC.NgayBatDau, HC.NgayKetThuc, HC.TongTien AS TongTienHopDong
         FROM dbo.ODAT OD
         JOIN dbo.NONGTRAI NT ON OD.MaNongTrai = NT.MaNongTrai
         LEFT JOIN dbo.NHANVIEN NV ON NT.MaChuNongTrai = NV.MaNV
+        OUTER APPLY (
+            SELECT TOP 1 
+                HD.MaHopDong, HD.MaKH, KH.TenKH, KH.Email AS EmailKH, KH.DienThoai AS DienThoaiKH,
+                CT.TenCayTrong, HD.NgayBatDau, HD.NgayKetThuc, HD.TongTien
+            FROM dbo.HOPDONGTHUE HD
+            JOIN dbo.KHACHHANG KH ON HD.MaKH = KH.MaKH
+            LEFT JOIN dbo.CAYTRONG CT ON HD.MaCayTrong = CT.MaCayTrong
+            WHERE HD.MaODat = OD.MaODat AND HD.TrangThai = 'ACTIVE'
+            ORDER BY HD.CreatedAt DESC
+        ) HC
         WHERE 1=1
     `;
     if (filters.farmId) {
@@ -41,10 +53,22 @@ export const getPlotById = async (id) => {
         SELECT OD.*, NT.TenNongTrai, NT.MaChuNongTrai,
                LTRIM(RTRIM(NV.Ho + ' ' + NV.Ten)) AS TenChuNongTrai,
                NV.Email AS EmailChuNongTrai,
-               NV.DienThoai AS DienThoaiChuNongTrai
+               NV.DienThoai AS DienThoaiChuNongTrai,
+               HC.MaHopDong, HC.MaKH, HC.TenKH, HC.EmailKH, HC.DienThoaiKH,
+               HC.TenCayTrong, HC.NgayBatDau, HC.NgayKetThuc, HC.TongTien AS TongTienHopDong
         FROM dbo.ODAT OD
         JOIN dbo.NONGTRAI NT ON OD.MaNongTrai = NT.MaNongTrai
         LEFT JOIN dbo.NHANVIEN NV ON NT.MaChuNongTrai = NV.MaNV
+        OUTER APPLY (
+            SELECT TOP 1 
+                HD.MaHopDong, HD.MaKH, KH.TenKH, KH.Email AS EmailKH, KH.DienThoai AS DienThoaiKH,
+                CT.TenCayTrong, HD.NgayBatDau, HD.NgayKetThuc, HD.TongTien
+            FROM dbo.HOPDONGTHUE HD
+            JOIN dbo.KHACHHANG KH ON HD.MaKH = KH.MaKH
+            LEFT JOIN dbo.CAYTRONG CT ON HD.MaCayTrong = CT.MaCayTrong
+            WHERE HD.MaODat = OD.MaODat AND HD.TrangThai = 'ACTIVE'
+            ORDER BY HD.CreatedAt DESC
+        ) HC
         WHERE OD.MaODat = @id
     `);
     return result.recordset[0];

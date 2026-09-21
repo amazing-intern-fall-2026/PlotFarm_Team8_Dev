@@ -7,7 +7,7 @@ import { AppError } from '../utils/AppError.js';
 export const createContract = async (payload, user) => {
     // User must be CUSTOMER
     if (user?.role !== 'CUSTOMER') {
-        throw new AppError('Chỉ Khách hàng mới có thể tạo hợp đồng.', 403);
+        throw new AppError('Chi Khach hang moi co the tao hop dong.', 403);
     }
 
     const maODat = payload.maODat || payload.MaODat;
@@ -43,26 +43,28 @@ export const createContract = async (payload, user) => {
         
         const tongTien = Number(plot.GiaThue) * soThangThue;
 
-        // 4. Update Plot Status to DANG_THUE (must be TRONG)
+        // 4. Update Plot Status to DANG_THUE (legacy flow - immediate activation)
         const updatedPlot = await contractRepository.updatePlotStatus(maODat, 'DANG_THUE', transaction);
         if (!updatedPlot) {
             throw new AppError('Ô Đất này hiện không còn trống.', 400);
         }
 
-        // 5. Create Contract
+        // 5. Create Contract (ACTIVE immediately - legacy endpoint for backward compat)
         const contractData = {
-            MaKH: user.userId, // Authenticated Customer ID
+            MaKH: user.userId,
             MaODat: maODat,
             MaCayTrong: maCayTrong,
             NgayBatDau: ngayBatDau,
             NgayKetThuc: ngayKetThuc,
-            TongTien: tongTien
+            TongTien: tongTien,
+            TrangThai: 'ACTIVE', // Legacy: kich hoat ngay (dung cho POST /contracts cu)
         };
         
         const newContract = await contractRepository.createContract(contractData, transaction);
         return newContract;
     });
 };
+
 
 // ─── Extended Functions ───────────────────────────────────────────────────────
 

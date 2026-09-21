@@ -2,11 +2,13 @@ import apiClient from "../../services/api/apiClient";
 import type {
   CareRequestItem,
   CareRequestStatus,
+  DeliveryStatus,
   FarmerKPISummary,
   FarmerPlotItem,
   FarmerProfileData,
   FarmingLogItem,
   HarvestItem,
+  HarvestStatus,
   PlantGrowthStage,
 } from "./farmer.types";
 import { getCurrentUser } from "../auth/auth.api";
@@ -276,10 +278,15 @@ export const farmerService = {
 
   getHarvests(farmerId?: string): HarvestItem[] {
     const activeFarmerId = farmerId || this.getActiveFarmerId();
-    const assignedPlotCodes = new Set(this.getPlots(activeFarmerId).map((p) => p.plotCode));
+    const plots = this.getPlots(activeFarmerId);
+    const assignedKeys = new Set([
+      ...plots.map((p) => p.plotCode),
+      ...plots.map((p) => p.id),
+      ...plots.map((p) => p.contractId),
+    ]);
     const allHarvests = this.getAllHarvests();
-    const filtered = allHarvests.filter((h) => assignedPlotCodes.has(h.plot));
-    return filtered.length > 0 ? filtered : allHarvests;
+    const filtered = allHarvests.filter((h) => assignedKeys.has(h.plot));
+    return filtered;
   },
 
   updateHarvest(
@@ -312,17 +319,35 @@ export const farmerService = {
   getFarmerProfile(farmerId?: string): FarmerProfileData {
     const user = getCurrentUser();
     const activeId = farmerId || this.getActiveFarmerId();
-    if (serverProfiles[activeId]) {
-      return serverProfiles[activeId];
+    const plots = this.getPlots(activeId);
+    const plotFarms = Array.from(new Set(plots.map((p) => p.farmName).filter(Boolean)));
+    const existing = serverProfiles[activeId];
+
+    const actualFarms =
+      plotFarms.length > 0
+        ? plotFarms
+        : existing?.assignedFarms && existing.assignedFarms.length > 0
+        ? existing.assignedFarms
+        : ["Nông trại PlotFarm"];
+
+    if (existing) {
+      return {
+        ...existing,
+        name: user?.fullName || existing.name,
+        email: user?.email || existing.email,
+        phone: (user as any)?.phone || existing.phone,
+        assignedFarms: actualFarms,
+        assignedPlotCount: plots.length || existing.assignedPlotCount,
+      };
     }
     return {
       id: activeId,
       username: user?.username || "farmer",
-      name: user?.fullName || "Kỹ sư Canh tác PlotFarm",
+      name: user?.fullName || plots[0]?.farmerName || "Kỹ sư Canh tác PlotFarm",
       phone: (user as unknown as { phone?: string })?.phone || "0901234567",
       email: user?.email || "farmer@plotfarm.com",
-      assignedFarms: ["Nông trại Hữu cơ Củ Chi"],
-      assignedPlotCount: serverPlots.length || 3,
+      assignedFarms: actualFarms,
+      assignedPlotCount: plots.length,
       avatarIcon: "👨‍🌾",
       specialties: ["Nông nghiệp hữu cơ", "Quản lý Thửa đất IoT"],
       roleTitle: "Kỹ sư Nông nghiệp",
@@ -376,8 +401,31 @@ export const farmerService = {
           plotLogs.sort((a: any, b: any) => new Date(b.NgayGhi || b.CreatedAt || 0).getTime() - new Date(a.NgayGhi || a.CreatedAt || 0).getTime());
           const latestLog = plotLogs[0];
           const progress = latestLog?.TienDoPhanTram !== undefined ? Number(latestLog.TienDoPhanTram) : (isRented ? 45 : 0);
-          const plantStatus = (latestLog?.GiaiDoanCay as PlantGrowthStage) || (isRented ? "Phát triển tốt" : "Đang gieo trồng");
+          let plantStatus: PlantGrowthStage = (latestLog?.GiaiDoanCay as PlantGrowthStage) || (isRented ? "Phát triển tốt" : "Đang gieo trồng");
           const engineerName = p.TenChuNongTrai || relatedContract?.TenChuNongTrai || "Lê Văn Canh Tác";
+
+          // Correlate with rawHarvests
+          const relatedHarvest = (rawHarvests || []).find((h: any) =>
+            (h.MaODat && h.MaODat === p.MaODat) ||
+            (h.TenODat && (h.TenODat === p.TenODat || h.TenODat === p.MaODat)) ||
+            (relatedContract && h.MaHopDong === relatedContract.MaHopDong)
+          );
+
+          let harvestId: string | undefined = undefined;
+          let harvestStatus: HarvestStatus | undefined = undefined;
+          let deliveryStatus: DeliveryStatus | undefined = undefined;
+
+          if (relatedHarvest) {
+            harvestId = relatedHarvest.MaThuHoach;
+            harvestStatus = relatedHarvest.TrangThaiThuHoach as HarvestStatus;
+            deliveryStatus = (relatedHarvest.TrangThaiGiaoHang || "WAITING_PICKUP") as DeliveryStatus;
+
+            if (deliveryStatus === "DELIVERED") {
+              plantStatus = "Đã giao hàng";
+            } else if (harvestStatus === "HARVESTED") {
+              plantStatus = "Đã thu hoạch";
+            }
+          }
 
           return {
             id: p.MaODat,
@@ -406,6 +454,9 @@ export const farmerService = {
             },
             cameraFeedUrl: p.CameraUrl || undefined,
             plotThumbnail: p.HinhAnhThumbnail || undefined,
+            harvestId,
+            harvestStatus,
+            deliveryStatus,
           };
         });
       }
@@ -454,8 +505,16 @@ export const farmerService = {
           plantCrop: h.TenCayTrong || "Nông sản hữu cơ",
           expectedHarvestDate: h.NgayThuHoachDuKien ? new Date(h.NgayThuHoachDuKien).toLocaleDateString("vi-VN") : "Sắp tới",
           actualHarvestDate: h.NgayThuHoachThucTe ? new Date(h.NgayThuHoachThucTe).toLocaleDateString("vi-VN") : undefined,
-          expectedQuantity: `${h.SanLuongDuKien || 30} kg`,
-          actualQuantity: h.SanLuongThucTe ? `${h.SanLuongThucTe} kg` : undefined,
+          expectedQuantity: h.SanLuongDuKien
+            ? String(h.SanLuongDuKien).trim().toLowerCase().endsWith('kg')
+              ? String(h.SanLuongDuKien).trim()
+              : `${h.SanLuongDuKien} kg`
+            : "30 kg",
+          actualQuantity: h.SanLuongThucTe
+            ? String(h.SanLuongThucTe).trim().toLowerCase().endsWith('kg')
+              ? String(h.SanLuongThucTe).trim()
+              : `${h.SanLuongThucTe} kg`
+            : undefined,
           harvestStatus: h.TrangThaiThuHoach as any,
           packageStatus: (h.TrangThaiDongGoi || "NOT_PACKED") as any,
           deliveryStatus: (h.TrangThaiGiaoHang || "WAITING_PICKUP") as any,
@@ -464,6 +523,24 @@ export const farmerService = {
           note: h.GhiChu || undefined,
         }));
       }
+
+      // Update serverProfiles dynamically with actual assigned plots and farms
+      const currentPlots = this.getPlots(activeFarmerId);
+      const computedFarms = Array.from(
+        new Set(currentPlots.map((p) => p.farmName).filter(Boolean))
+      );
+      const currentUser = getCurrentUser();
+
+      serverProfiles[activeFarmerId] = {
+        ...(serverProfiles[activeFarmerId] || this.getFarmerProfile(activeFarmerId)),
+        id: activeFarmerId,
+        username: currentUser?.username || "farmer",
+        name: currentUser?.fullName || currentPlots[0]?.farmerName || "Kỹ Sư Nông Dân",
+        email: currentUser?.email || "farmer@plotfarm.com",
+        phone: (currentUser as any)?.phone || "0901234567",
+        assignedFarms: computedFarms.length > 0 ? computedFarms : ["Nông trại PlotFarm"],
+        assignedPlotCount: currentPlots.length,
+      };
 
       notifyDataChanged("farmer_data_hydrated");
     } catch (err) {
@@ -549,6 +626,23 @@ export const farmerService = {
     }
 
     const res = await apiClient.patch<any>(`/harvests/${id}/status`, payload);
+    await this.fetchFarmerDataAsync();
+    return res;
+  },
+
+  async createHarvestAsync(payload: {
+    maHopDong: string;
+    ngayThuHoachDuKien: string;
+    sanLuongDuKien: string;
+    ngayThuHoachThucTe?: string;
+    sanLuongThucTe?: string;
+    trangThaiThuHoach?: string;
+    trangThaiDongGoi?: string;
+    trangThaiGiaoHang?: string;
+    diaChiGiaoHang?: string;
+    ghiChu?: string;
+  }): Promise<any> {
+    const res = await apiClient.post<any>("/harvests", payload);
     await this.fetchFarmerDataAsync();
     return res;
   },

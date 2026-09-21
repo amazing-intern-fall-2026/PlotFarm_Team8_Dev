@@ -17,4 +17,17 @@ router.get('/users', adminController.getAllUsers);
 // PATCH /api/v1/admin/users/:id/status
 router.patch('/users/:id/status', adminController.updateUserStatus);
 
+// Farmer Applications Management (KYC & Approval)
+// GET /api/v1/admin/farmer-applications
+router.get('/farmer-applications', adminController.getFarmerApplications);
+
+// GET /api/v1/admin/farmer-applications/:id
+router.get('/farmer-applications/:id', adminController.getFarmerApplicationById);
+
+// POST /api/v1/admin/farmer-applications/:id/approve
+router.post('/farmer-applications/:id/approve', adminController.approveFarmerApplication);
+
+// POST /api/v1/admin/farmer-applications/:id/reject
+router.post('/farmer-applications/:id/reject', adminController.rejectFarmerApplication);
+
 export default router;

@@ -581,6 +581,46 @@ export const customerService = {
     return { plot: updatedPlot, contract };
   },
 
+  // ─── Payment APIs (2-step flow: initiate → confirm) ──────────────────────
+
+  async initiatePaymentAsync(payload: {
+    plotId: string;
+    cropType: string;
+    durationMonths: number;
+    paymentMethod: "VIETQR" | "VNPAY" | "MOMO";
+  }): Promise<{
+    payment: { MaThanhToan: string; SoTien: number; NoiDungCK: string; PhuongThuc: string; TrangThai: string };
+    contract: { MaHopDong: string; TrangThai: string };
+    bankInfo: { nganHang: string; soTaiKhoan: string; chuTaiKhoan: string; soTien: number; noiDungCK: string };
+  }> {
+    let cropId = payload.cropType;
+    if (!cropId.startsWith("CT") && cachedCrops.length > 0) {
+      const matched = cachedCrops.find(
+        (c) => c.TenCayTrong.toLowerCase().includes(payload.cropType.toLowerCase()) ||
+               payload.cropType.toLowerCase().includes(c.TenCayTrong.toLowerCase()),
+      );
+      if (matched) cropId = matched.MaCayTrong;
+      else cropId = cachedCrops[0].MaCayTrong;
+    } else if (!cropId.startsWith("CT")) {
+      cropId = "CT001";
+    }
+
+    const responseDto = await apiClient.post<any>("/payments/initiate", {
+      maODat:      payload.plotId,
+      maCayTrong:  cropId,
+      soThangThue: payload.durationMonths,
+      phuongThuc:  payload.paymentMethod,
+    });
+
+    return responseDto;
+  },
+
+  async confirmPaymentAsync(paymentId: string): Promise<{ payment: any; contract: any }> {
+    const responseDto = await apiClient.post<any>(`/payments/${paymentId}/confirm`, {});
+    notifyDataChanged("contract_created", { contract: responseDto?.contract });
+    return responseDto;
+  },
+
   // ─── Task 15: Asynchronous Farming Logs API ───────────────────────────────
   async fetchFarmingLogsAsync(contractId?: string, plotId?: string): Promise<SharedFarmingLogItem[]> {
     try {

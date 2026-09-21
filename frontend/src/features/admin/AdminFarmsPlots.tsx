@@ -526,22 +526,37 @@ export default function AdminFarmsPlots() {
                       <td className="px-5 py-3.5 text-gray-800 font-semibold">{p.DienTich} m²</td>
                       <td className="px-5 py-3.5 text-indigo-700 font-bold">{formatVND(p.GiaThue)}</td>
                       <td className="px-5 py-3.5">
-                        <Badge
-                          variant={
-                            p.TrangThai === 'TRONG'
-                              ? 'success'
+                        <div className="space-y-1">
+                          <Badge
+                            variant={
+                              p.TrangThai === 'TRONG'
+                                ? 'success'
+                                : p.TrangThai === 'DANG_THUE'
+                                ? 'indigo'
+                                : 'warning'
+                            }
+                            size="sm"
+                          >
+                            {p.TrangThai === 'TRONG'
+                              ? 'Trống'
                               : p.TrangThai === 'DANG_THUE'
-                              ? 'indigo'
-                              : 'warning'
-                          }
-                          size="sm"
-                        >
-                          {p.TrangThai === 'TRONG'
-                            ? 'Trống'
-                            : p.TrangThai === 'DANG_THUE'
-                            ? 'Đang thuê'
-                            : 'Bảo trì'}
-                        </Badge>
+                              ? 'Đang thuê'
+                              : 'Bảo trì'}
+                          </Badge>
+                          {p.TrangThai === 'DANG_THUE' && p.TenKH && (
+                            <div className="text-2xs text-gray-600 bg-gray-50 border border-gray-200 rounded p-1.5 mt-1 space-y-0.5">
+                              <p className="font-semibold text-gray-800 flex items-center gap-1">
+                                <span>👤</span> {p.TenKH}
+                              </p>
+                              {p.TenCayTrong && (
+                                <p className="text-emerald-700 font-medium">🌱 {p.TenCayTrong}</p>
+                              )}
+                              {p.MaHopDong && (
+                                <p className="text-gray-400 font-mono text-3xs">HĐ: {p.MaHopDong}</p>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </td>
                       <td className="px-5 py-3.5">
                         {p.CameraUrl ? (
@@ -764,11 +779,25 @@ export default function AdminFarmsPlots() {
               value={plotForm.TrangThai}
               onChange={(e) => setPlotForm({ ...plotForm, TrangThai: e.target.value as any })}
               className="w-full rounded-lg border border-gray-300 py-2 px-3 bg-white text-gray-700 text-xs focus:outline-none"
+              disabled={editingPlot?.TrangThai === 'DANG_THUE'}
             >
-              <option value="TRONG">Trống (Sẵn sàng thuê)</option>
-              <option value="DANG_THUE">Đang có khách thuê</option>
+              <option value="TRONG">Trống (Sẵn sàng cho thuê)</option>
               <option value="BAO_TRI">Đang cải tạo / bảo trì đất</option>
+              {editingPlot?.TrangThai === 'DANG_THUE' && (
+                <option value="DANG_THUE" disabled>
+                  Đang có khách thuê (Quản lý qua Hợp đồng)
+                </option>
+              )}
             </select>
+            {editingPlot?.TrangThai === 'DANG_THUE' ? (
+              <p className="text-2xs text-amber-600 mt-1">
+                ⚠️ Ô đất đang có hợp đồng thuê hoạt động. Để chuyển về trạng thái Trống, vui lòng kết thúc hoặc hủy hợp đồng tại tab <strong>Hợp đồng thuê đất</strong>.
+              </p>
+            ) : (
+              <p className="text-2xs text-gray-500 mt-1">
+                ℹ️ Trạng thái "Đang thuê" sẽ được hệ thống tự động kích hoạt khi khách hàng đặt cọc/ký hợp đồng thuê.
+              </p>
+            )}
           </div>
 
           <div className="flex justify-end gap-2.5 pt-4 border-t border-gray-100">

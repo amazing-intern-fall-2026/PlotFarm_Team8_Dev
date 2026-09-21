@@ -112,8 +112,16 @@ export default function AdminHarvestDelivery() {
   function openEditModal(h: AdminHarvest) {
     setActionError(null);
     setEditingHarvest(h);
+    const rawQty = h.SanLuongThucTe ?? h.SanLuongDuKien;
+    const numQty =
+      typeof rawQty === 'number'
+        ? rawQty
+        : rawQty
+        ? parseFloat(String(rawQty).replace(/[^\d.]/g, '')) || 0
+        : 0;
+
     setEditForm({
-      sanLuongThucTe: h.SanLuongThucTe ?? h.SanLuongDuKien,
+      sanLuongThucTe: numQty > 0 ? numQty : 50,
       ngayThuHoachThucTe: h.NgayThuHoachThucTe
         ? new Date(h.NgayThuHoachThucTe).toISOString().split('T')[0]
         : new Date().toISOString().split('T')[0],
@@ -140,6 +148,11 @@ export default function AdminHarvestDelivery() {
       setIsSubmitting(true);
       setActionError(null);
 
+      let finalTracking = editForm.maVanDon.trim();
+      if (editForm.trangThaiGiaoHang === 'DELIVERING' && !finalTracking) {
+        finalTracking = `VNPOST-PF${Math.floor(100000 + Math.random() * 900000)}`;
+      }
+
       // 1. Update Harvest status & actual quantity
       await adminService.updateHarvestStatus(editingHarvest.MaThuHoach, {
         trangThaiThuHoach: editForm.trangThaiThuHoach,
@@ -153,7 +166,7 @@ export default function AdminHarvestDelivery() {
       // 2. Update Delivery details (tracking code, delivery address, statuses)
       await adminService.updateHarvestDelivery(editingHarvest.MaThuHoach, {
         diaChiGiaoHang: editForm.diaChiGiaoHang.trim() || undefined,
-        maVanDon: editForm.maVanDon.trim() || undefined,
+        maVanDon: finalTracking || undefined,
         trangThaiGiaoHang: editForm.trangThaiGiaoHang,
         trangThaiDongGoi: editForm.trangThaiDongGoi,
       });
@@ -552,7 +565,14 @@ export default function AdminHarvestDelivery() {
                 <label className="block font-semibold text-gray-700 mb-1">Trạng thái giao hàng</label>
                 <select
                   value={editForm.trangThaiGiaoHang}
-                  onChange={(e) => setEditForm({ ...editForm, trangThaiGiaoHang: e.target.value as any })}
+                  onChange={(e) => {
+                    const nextStatus = e.target.value as any;
+                    let nextTracking = editForm.maVanDon;
+                    if (nextStatus === 'DELIVERING' && !nextTracking) {
+                      nextTracking = `VNPOST-PF${Math.floor(100000 + Math.random() * 900000)}`;
+                    }
+                    setEditForm({ ...editForm, trangThaiGiaoHang: nextStatus, maVanDon: nextTracking });
+                  }}
                   className="w-full rounded-lg border border-gray-300 py-1.5 px-2.5 bg-white text-gray-700 text-xs focus:outline-none"
                 >
                   <option value="WAITING_PICKUP">WAITING_PICKUP (Chờ bưu tá lấy hàng)</option>
