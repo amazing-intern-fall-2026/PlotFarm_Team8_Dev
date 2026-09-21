@@ -21,7 +21,8 @@ export type CustomerTab =
   | "logs"
   | "requests"
   | "harvest"
-  | "farms";
+  | "farms"
+  | "profile";
 
 export interface CustomerKPISummary {
   totalOwnedPlots: number;

@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { getCurrentUser, logout } from "../auth/auth.api";
+import { getCurrentUser, logout, fetchCurrentUser } from "../auth/auth.api";
 import { useAuth } from "../auth/AuthContext";
-import { Sidebar, type SidebarMenuItem } from "../../components/layout";
+import { Sidebar, UserDropdownMenu, type SidebarMenuItem } from "../../components/layout";
 import { Modal, Button } from "../../components/ui";
+import ChangePasswordModal from "../auth/ChangePasswordModal";
 
 // Admin Module Components
 import AdminDashboard from "./AdminDashboard";
@@ -12,19 +13,22 @@ import AdminContracts from "./AdminContracts";
 import AdminCareRequests from "./AdminCareRequests";
 import AdminHarvestDelivery from "./AdminHarvestDelivery";
 import AdminUsers from "./AdminUsers";
+import AdminProfile from "./AdminProfile";
 import { adminService } from "./admin.service";
 import type { AdminKPIData } from "./admin.types";
 
-export type AdminTab = "dashboard" | "farms-plots" | "contracts" | "requests" | "harvest" | "users";
+export type AdminTab = "dashboard" | "farms-plots" | "contracts" | "requests" | "harvest" | "users" | "profile";
 
 export default function AdminLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user: authUser, logout: authLogout } = useAuth();
-  const user = authUser || getCurrentUser();
+  const [currentUser, setCurrentUser] = useState(() => authUser || getCurrentUser());
+  const user = currentUser;
 
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const [kpiSummary, setKpiSummary] = useState<AdminKPIData | null>(null);
 
   // Sync active tab from URL path
@@ -36,15 +40,36 @@ export default function AdminLayout() {
     if (path.includes("/admin/requests")) return "requests";
     if (path.includes("/admin/harvest")) return "harvest";
     if (path.includes("/admin/users")) return "users";
+    if (path.includes("/admin/profile")) return "profile";
     return "dashboard";
   })();
 
-  // Load KPI for badges
+  // Load KPI for badges and fresh user profile
   useEffect(() => {
+    let isMounted = true;
+    fetchCurrentUser()
+      .then((u) => {
+        if (isMounted && u) setCurrentUser(u);
+      })
+      .catch(() => null);
+
     adminService
       .fetchKPI()
-      .then((data) => setKpiSummary(data))
+      .then((data) => {
+        if (isMounted) setKpiSummary(data);
+      })
       .catch((err) => console.error("Failed to fetch admin sidebar KPI:", err));
+
+    function handleSync() {
+      setCurrentUser(getCurrentUser());
+    }
+    window.addEventListener("pf_admin_profile_changed", handleSync);
+    window.addEventListener("pf_auth_changed", handleSync);
+    return () => {
+      isMounted = false;
+      window.removeEventListener("pf_admin_profile_changed", handleSync);
+      window.removeEventListener("pf_auth_changed", handleSync);
+    };
   }, []);
 
   function handleTabChange(tab: AdminTab) {
@@ -82,6 +107,7 @@ export default function AdminLayout() {
     },
     { id: "harvest", label: "Thu hoạch & Giao hàng", icon: "🌾" },
     { id: "users", label: "Quản lý người dùng", icon: "👥" },
+    { id: "profile", label: "Hồ sơ Quản Trị Viên", icon: "👤" },
   ];
 
   return (
@@ -114,6 +140,7 @@ export default function AdminLayout() {
         }
         onLogout={handleLogout}
         logoutText="Đăng xuất Admin"
+        onUserProfileClick={() => handleTabChange("profile")}
       />
 
       {/* Main Content Area */}
@@ -140,6 +167,25 @@ export default function AdminLayout() {
             >
               📥 Xuất báo cáo tổng hợp
             </Button>
+
+            {/* Polished User Dropdown Menu */}
+            <UserDropdownMenu
+              user={{
+                name: user?.fullName || user?.username || "Admin",
+                username: user?.username,
+                email: user?.email || "admin@plotfarm.com",
+                phone: (user as any)?.phone,
+                roleBadge: "Quản Trị Viên Hệ Thống",
+                roleTitle: "Quản Trị Viên • Admin",
+                avatarText: "AD",
+                avatarBg: "bg-slate-900 text-white",
+              }}
+              theme="slate"
+              isActiveProfile={activeTab === "profile"}
+              onProfileClick={() => handleTabChange("profile")}
+              onChangePasswordClick={() => setIsPasswordModalOpen(true)}
+              onLogout={handleLogout}
+            />
           </div>
         </header>
 
@@ -158,6 +204,14 @@ export default function AdminLayout() {
           {activeTab === "harvest" && <AdminHarvestDelivery />}
 
           {activeTab === "users" && <AdminUsers />}
+
+          {activeTab === "profile" && (
+            <AdminProfile
+              onNavigateUsers={() => handleTabChange("users")}
+              onNavigateFarms={() => handleTabChange("farms-plots")}
+              onLogout={handleLogout}
+            />
+          )}
         </main>
       </div>
 
@@ -212,6 +266,14 @@ export default function AdminLayout() {
           </div>
         </div>
       </Modal>
+
+      {/* Change Password Modal accessible directly from header */}
+      <ChangePasswordModal
+        isOpen={isPasswordModalOpen}
+        onClose={() => setIsPasswordModalOpen(false)}
+        userEmailOrName={user?.fullName || user?.username || "Admin"}
+      />
     </div>
   );
 }
+

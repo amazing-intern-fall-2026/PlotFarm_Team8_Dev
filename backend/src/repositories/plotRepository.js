@@ -7,9 +7,13 @@ export const getAllPlots = async (filters = {}) => {
     const pool = getPool();
     const request = new sql.Request(pool);
     let query = `
-        SELECT OD.*, NT.TenNongTrai, NT.MaChuNongTrai
+        SELECT OD.*, NT.TenNongTrai, NT.MaChuNongTrai,
+               LTRIM(RTRIM(NV.Ho + ' ' + NV.Ten)) AS TenChuNongTrai,
+               NV.Email AS EmailChuNongTrai,
+               NV.DienThoai AS DienThoaiChuNongTrai
         FROM dbo.ODAT OD
         JOIN dbo.NONGTRAI NT ON OD.MaNongTrai = NT.MaNongTrai
+        LEFT JOIN dbo.NHANVIEN NV ON NT.MaChuNongTrai = NV.MaNV
         WHERE 1=1
     `;
     if (filters.farmId) {
@@ -34,9 +38,13 @@ export const getPlotById = async (id) => {
     const request = new sql.Request(pool);
     request.input('id', sql.VarChar, id);
     const result = await request.query(`
-        SELECT OD.*, NT.TenNongTrai, NT.MaChuNongTrai
+        SELECT OD.*, NT.TenNongTrai, NT.MaChuNongTrai,
+               LTRIM(RTRIM(NV.Ho + ' ' + NV.Ten)) AS TenChuNongTrai,
+               NV.Email AS EmailChuNongTrai,
+               NV.DienThoai AS DienThoaiChuNongTrai
         FROM dbo.ODAT OD
         JOIN dbo.NONGTRAI NT ON OD.MaNongTrai = NT.MaNongTrai
+        LEFT JOIN dbo.NHANVIEN NV ON NT.MaChuNongTrai = NV.MaNV
         WHERE OD.MaODat = @id
     `);
     return result.recordset[0];

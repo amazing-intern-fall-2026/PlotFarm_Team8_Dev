@@ -31,6 +31,7 @@ export default function FarmerPlots() {
   const [editingPlot, setEditingPlot] = useState<FarmerPlotItem | null>(null);
   const [editProgress, setEditProgress] = useState<number>(0);
   const [editPlantStatus, setEditPlantStatus] = useState<PlantGrowthStage>("Phát triển tốt");
+  const [isSaving, setIsSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
 
   const farmList = Array.from(new Set(plots.map((p) => p.farmName)));
@@ -54,13 +55,20 @@ export default function FarmerPlots() {
     setEditPlantStatus(plot.plantStatus);
   }
 
-  function handleSaveEdit() {
+  async function handleSaveEdit() {
     if (!editingPlot) return;
-    const updated = farmerService.updatePlot(editingPlot.id, editProgress, editPlantStatus);
-    setPlots((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
-    setEditingPlot(null);
-    setSuccessMessage(`Đã cập nhật thành công tiến độ thửa đất ${updated.plotCode}!`);
-    setTimeout(() => setSuccessMessage(""), 3500);
+    setIsSaving(true);
+    try {
+      const updated = await farmerService.updatePlotAsync(editingPlot.id, editProgress, editPlantStatus);
+      setPlots((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+      setEditingPlot(null);
+      setSuccessMessage(`Đã cập nhật thành công tiến độ thửa đất ${updated.plotCode} lên ${editProgress}%!`);
+      setTimeout(() => setSuccessMessage(""), 3500);
+    } catch (err: any) {
+      alert(err?.message || "Không thể cập nhật tiến độ thửa đất.");
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   function getStatusBadge(status: PlotStatus) {
@@ -317,8 +325,9 @@ export default function FarmerPlots() {
               size="sm"
               fullWidth={false}
               onClick={handleSaveEdit}
+              disabled={isSaving}
             >
-              Lưu thay đổi
+              {isSaving ? "Đang lưu..." : "Lưu thay đổi"}
             </Button>
           </>
         }

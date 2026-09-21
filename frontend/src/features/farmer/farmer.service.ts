@@ -11,42 +11,14 @@ import type {
 } from "./farmer.types";
 import { getCurrentUser } from "../auth/auth.api";
 
-const STORAGE_KEYS = {
-  PLOTS: "pf_farmer_plots",
-  LOGS: "pf_farmer_logs",
-  REQUESTS: "pf_farmer_requests",
-  HARVESTS: "pf_farmer_harvests",
-  PROFILES: "pf_farmer_profiles",
-};
-
-// In-memory runtime cache for server-fetched data
-let serverPlots: FarmerPlotItem[] | null = null;
-let serverLogs: FarmingLogItem[] | null = null;
-let serverRequests: CareRequestItem[] | null = null;
-let serverHarvests: HarvestItem[] | null = null;
+// In-memory runtime cache for server-fetched data (no localStorage persistence for DB records)
+let serverPlots: FarmerPlotItem[] = [];
+let serverLogs: FarmingLogItem[] = [];
+let serverRequests: CareRequestItem[] = [];
+let serverHarvests: HarvestItem[] = [];
 let serverContracts: any[] = [];
+let serverProfiles: Record<string, FarmerProfileData> = {};
 let isFetchingServer = false;
-
-function getStoredData<T>(key: string, defaultData: T): T {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) {
-      localStorage.setItem(key, JSON.stringify(defaultData));
-      return defaultData;
-    }
-    return JSON.parse(raw) as T;
-  } catch {
-    return defaultData;
-  }
-}
-
-function setStoredData<T>(key: string, data: T): void {
-  try {
-    localStorage.setItem(key, JSON.stringify(data));
-  } catch (e) {
-    console.error("Failed to store data in localStorage:", e);
-  }
-}
 
 function notifyDataChanged(eventType: string, detail?: unknown): void {
   if (typeof window !== "undefined") {
@@ -105,10 +77,7 @@ export const farmerService = {
 
   // 2. Plots - Farmer chỉ thấy và thao tác trên Farm/Plot được Admin phân công
   getAllPlots(): FarmerPlotItem[] {
-    if (serverPlots && serverPlots.length > 0) {
-      return serverPlots;
-    }
-    return getStoredData<FarmerPlotItem[]>(STORAGE_KEYS.PLOTS, []);
+    return serverPlots;
   },
 
   getPlots(farmerId?: string): FarmerPlotItem[] {
@@ -119,7 +88,55 @@ export const farmerService = {
     return matched.length > 0 ? matched : allPlots;
   },
 
+  async updatePlotAsync(
+    plotId: string,
+    progress: number,
+    plantStatus: PlantGrowthStage
+  ): Promise<FarmerPlotItem> {
+    const allPlots = this.getAllPlots();
+    const index = allPlots.findIndex((p) => p.id === plotId);
+    if (index === -1) {
+      throw new Error("Không tìm thấy thửa đất.");
+    }
+    const plot = allPlots[index];
+
+    // If plot has an active contract, call Backend API: POST /api/v1/farming-logs
+    if (plot.contractId && plot.contractId !== "HD-NONE") {
+      try {
+        await apiClient.post("/farming-logs", {
+          maHopDong: plot.contractId,
+          maODat: plot.id,
+          hoatDong: "Cập nhật tiến độ canh tác",
+          giaiDoanCay: plantStatus,
+          tienDoPhanTram: progress,
+          moTa: `Kỹ sư canh tác cập nhật tiến độ sinh trưởng cây trồng đạt ${progress}%.`,
+        });
+      } catch (err) {
+        console.warn("Lỗi khi gửi nhật ký canh tác lên máy chủ:", err);
+      }
+    }
+
+    allPlots[index] = {
+      ...allPlots[index],
+      progress,
+      plantStatus,
+      lastUpdate: "Vừa xong",
+    };
+    serverPlots = allPlots;
+    notifyDataChanged("plot_updated", allPlots[index]);
+
+    // Also refresh latest server data
+    await this.fetchFarmerDataAsync().catch((err) => {
+      console.warn("fetchFarmerDataAsync error after updatePlotAsync:", err);
+    });
+
+    const updated = this.getAllPlots().find((p) => p.id === plotId) || allPlots[index];
+    return updated;
+  },
+
   updatePlot(plotId: string, progress: number, plantStatus: PlantGrowthStage): FarmerPlotItem {
+    this.updatePlotAsync(plotId, progress, plantStatus).catch(console.error);
+
     const allPlots = this.getAllPlots();
     const index = allPlots.findIndex((p) => p.id === plotId);
     if (index === -1) {
@@ -132,17 +149,13 @@ export const farmerService = {
       lastUpdate: "Vừa xong",
     };
     serverPlots = allPlots;
-    setStoredData(STORAGE_KEYS.PLOTS, allPlots);
     notifyDataChanged("plot_updated", allPlots[index]);
     return allPlots[index];
   },
 
   // 3. Farming Logs - Filtered by assigned plots
   getAllFarmingLogs(): FarmingLogItem[] {
-    if (serverLogs && serverLogs.length > 0) {
-      return serverLogs;
-    }
-    return getStoredData<FarmingLogItem[]>(STORAGE_KEYS.LOGS, []);
+    return serverLogs;
   },
 
   getFarmingLogs(farmerId?: string): FarmingLogItem[] {
@@ -174,7 +187,6 @@ export const farmerService = {
 
     const updated = [newLog, ...allLogs];
     serverLogs = updated;
-    setStoredData(STORAGE_KEYS.LOGS, updated);
     notifyDataChanged("log_added", newLog);
 
     // Asynchronously send to backend if contractId & plotId exist
@@ -195,10 +207,7 @@ export const farmerService = {
 
   // 4. Care Requests - Filtered by assigned plots
   getAllCareRequests(): CareRequestItem[] {
-    if (serverRequests && serverRequests.length > 0) {
-      return serverRequests;
-    }
-    return getStoredData<CareRequestItem[]>(STORAGE_KEYS.REQUESTS, []);
+    return serverRequests;
   },
 
   getCareRequests(farmerId?: string): CareRequestItem[] {
@@ -250,7 +259,6 @@ export const farmerService = {
     };
 
     serverRequests = allRequests;
-    setStoredData(STORAGE_KEYS.REQUESTS, allRequests);
     notifyDataChanged("request_updated", allRequests[index]);
 
     // Asynchronously send to backend
@@ -263,10 +271,7 @@ export const farmerService = {
 
   // 5. Harvests - Filtered by assigned plots
   getAllHarvests(): HarvestItem[] {
-    if (serverHarvests && serverHarvests.length > 0) {
-      return serverHarvests;
-    }
-    return getStoredData<HarvestItem[]>(STORAGE_KEYS.HARVESTS, []);
+    return serverHarvests;
   },
 
   getHarvests(farmerId?: string): HarvestItem[] {
@@ -293,7 +298,6 @@ export const farmerService = {
     };
 
     serverHarvests = allHarvests;
-    setStoredData(STORAGE_KEYS.HARVESTS, allHarvests);
     notifyDataChanged("harvest_updated", allHarvests[index]);
 
     // Asynchronously send to backend
@@ -308,12 +312,8 @@ export const farmerService = {
   getFarmerProfile(farmerId?: string): FarmerProfileData {
     const user = getCurrentUser();
     const activeId = farmerId || this.getActiveFarmerId();
-    const profiles = getStoredData<Record<string, FarmerProfileData>>(
-      STORAGE_KEYS.PROFILES,
-      {}
-    );
-    if (profiles[activeId]) {
-      return profiles[activeId];
+    if (serverProfiles[activeId]) {
+      return serverProfiles[activeId];
     }
     return {
       id: activeId,
@@ -322,7 +322,7 @@ export const farmerService = {
       phone: (user as unknown as { phone?: string })?.phone || "0901234567",
       email: user?.email || "farmer@plotfarm.com",
       assignedFarms: ["Nông trại Hữu cơ Củ Chi"],
-      assignedPlotCount: 3,
+      assignedPlotCount: serverPlots.length || 3,
       avatarIcon: "👨‍🌾",
       specialties: ["Nông nghiệp hữu cơ", "Quản lý Thửa đất IoT"],
       roleTitle: "Kỹ sư Nông nghiệp",
@@ -335,16 +335,11 @@ export const farmerService = {
   ): FarmerProfileData {
     const activeId = farmerId || this.getActiveFarmerId();
     const existing = this.getFarmerProfile(activeId);
-    const profiles = getStoredData<Record<string, FarmerProfileData>>(
-      STORAGE_KEYS.PROFILES,
-      {}
-    );
     const updated = {
       ...existing,
       ...updates,
     };
-    profiles[activeId] = updated;
-    setStoredData(STORAGE_KEYS.PROFILES, profiles);
+    serverProfiles[activeId] = updated;
     notifyDataChanged("profile_updated", updated);
     return updated;
   },
@@ -374,9 +369,20 @@ export const farmerService = {
           const relatedContract = serverContracts.find((c: any) => c.MaODat === p.MaODat);
           const isRented = p.TrangThai === "DANG_THUE";
 
+          // Find logs for this plot/contract
+          const plotLogs = (rawLogs || []).filter(
+            (l: any) => l.MaODat === p.MaODat || (relatedContract && l.MaHopDong === relatedContract.MaHopDong)
+          );
+          plotLogs.sort((a: any, b: any) => new Date(b.NgayGhi || b.CreatedAt || 0).getTime() - new Date(a.NgayGhi || a.CreatedAt || 0).getTime());
+          const latestLog = plotLogs[0];
+          const progress = latestLog?.TienDoPhanTram !== undefined ? Number(latestLog.TienDoPhanTram) : (isRented ? 45 : 0);
+          const plantStatus = (latestLog?.GiaiDoanCay as PlantGrowthStage) || (isRented ? "Phát triển tốt" : "Đang gieo trồng");
+          const engineerName = p.TenChuNongTrai || relatedContract?.TenChuNongTrai || "Lê Văn Canh Tác";
+
           return {
             id: p.MaODat,
             assignedFarmerId: p.MaChuNongTrai || activeFarmerId,
+            farmerName: engineerName,
             farmId: p.MaNongTrai,
             farmName: p.TenNongTrai || "Nông trại PlotFarm",
             plotCode: p.TenODat || p.MaODat,
@@ -386,9 +392,9 @@ export const farmerService = {
             plantCrop: relatedContract?.TenCayTrong || "Rau củ theo vụ",
             startDate: relatedContract?.NgayBatDau ? new Date(relatedContract.NgayBatDau).toLocaleDateString("vi-VN") : "01/01/2026",
             endDate: relatedContract?.NgayKetThuc ? new Date(relatedContract.NgayKetThuc).toLocaleDateString("vi-VN") : "01/06/2026",
-            plantStatus: isRented ? "Phát triển tốt" : "Đang gieo trồng",
-            progress: isRented ? 45 : 0,
-            lastUpdate: "Vừa xong",
+            plantStatus: plantStatus,
+            progress: progress,
+            lastUpdate: latestLog?.NgayGhi ? new Date(latestLog.NgayGhi).toLocaleDateString("vi-VN") : "Vừa xong",
             areaSquareMeter: Number(p.DienTich || 50),
             rentalPricePerMonth: Number(p.GiaThue || 2500000),
             sensorData: {
@@ -402,7 +408,6 @@ export const farmerService = {
             plotThumbnail: p.HinhAnhThumbnail || undefined,
           };
         });
-        setStoredData(STORAGE_KEYS.PLOTS, serverPlots);
       }
 
       // 2. Map Farming Logs
@@ -420,7 +425,6 @@ export const farmerService = {
           createdBy: l.NguoiGhi || "Nông dân phụ trách",
           progress: Number(l.TienDoPhanTram ?? 30),
         }));
-        setStoredData(STORAGE_KEYS.LOGS, serverLogs);
       }
 
       // 3. Map Care Requests
@@ -438,7 +442,6 @@ export const farmerService = {
           evidenceImage: r.HinhAnhKetQua || undefined,
           processedDate: r.CompletedAt ? new Date(r.CompletedAt).toLocaleDateString("vi-VN") : undefined,
         }));
-        setStoredData(STORAGE_KEYS.REQUESTS, serverRequests);
       }
 
       // 4. Map Harvests
@@ -460,7 +463,6 @@ export const farmerService = {
           trackingCode: h.MaVanDon || undefined,
           note: h.GhiChu || undefined,
         }));
-        setStoredData(STORAGE_KEYS.HARVESTS, serverHarvests);
       }
 
       notifyDataChanged("farmer_data_hydrated");

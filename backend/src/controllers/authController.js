@@ -83,3 +83,29 @@ export const resetPassword = async (req, res, next) => {
     next(err);
   }
 };
+
+export const updateProfile = async (req, res, next) => {
+  try {
+    const updatedUser = await authService.updateUserProfile(req.body, req.user);
+    successResponse(res, {
+      message: 'Cập nhật thông tin hồ sơ thành công',
+      data: { user: updatedUser },
+      statusCode: 200,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const changePassword = async (req, res, next) => {
+  try {
+    const result = await authService.changeUserPassword(req.body, req.user);
+    successResponse(res, {
+      message: result.message,
+      data: null,
+      statusCode: 200,
+    });
+  } catch (err) {
+    next(err);
+  }
+};

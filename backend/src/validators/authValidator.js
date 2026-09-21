@@ -117,3 +117,35 @@ export const validateResetPassword = [
   handleValidation,
 ];
 
+export const validateUpdateProfile = [
+  body('fullName')
+    .optional()
+    .trim()
+    .isLength({ min: 2, max: 255 })
+    .withMessage('Họ và tên phải từ 2 đến 255 ký tự'),
+  body('phone')
+    .optional()
+    .trim()
+    .matches(/^\d{9,11}$/)
+    .withMessage('Số điện thoại phải từ 9-11 chữ số'),
+  body('shippingAddress')
+    .optional()
+    .trim()
+    .isLength({ max: 500 })
+    .withMessage('Địa chỉ nhận hàng không vượt quá 500 ký tự'),
+  handleValidation,
+];
+
+export const validateChangePassword = [
+  body('oldPassword')
+    .notEmpty()
+    .withMessage('Vui lòng nhập mật khẩu hiện tại'),
+  body('newPassword')
+    .notEmpty()
+    .withMessage('Vui lòng nhập mật khẩu mới')
+    .isLength({ min: 6 })
+    .withMessage('Mật khẩu mới phải có ít nhất 6 ký tự'),
+  handleValidation,
+];
+
+

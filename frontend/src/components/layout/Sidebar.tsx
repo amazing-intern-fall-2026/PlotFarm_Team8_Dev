@@ -27,6 +27,7 @@ export interface SidebarProps<T extends string = string> {
   extraFooterWidget?: ReactNode;
   onLogout: () => void;
   logoutText?: string;
+  onUserProfileClick?: () => void;
 }
 
 export default function Sidebar<T extends string = string>({
@@ -45,6 +46,7 @@ export default function Sidebar<T extends string = string>({
   extraFooterWidget,
   onLogout,
   logoutText = "Đăng xuất",
+  onUserProfileClick,
 }: SidebarProps<T>) {
   const themeConfig = {
     slate: {
@@ -122,11 +124,11 @@ export default function Sidebar<T extends string = string>({
 
       {/* Main Responsive Sidebar Drawer */}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 w-68 flex flex-col justify-between transition-transform duration-200 lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 w-68 flex flex-col justify-between transition-transform duration-200 lg:sticky lg:top-0 lg:h-screen lg:shrink-0 lg:translate-x-0 ${
           themeConfig.asideBg
         } ${isOpenMobile ? "translate-x-0 shadow-2xl" : "-translate-x-full"}`}
       >
-        <div className="overflow-y-auto">
+        <div className="overflow-y-auto flex-1 min-h-0">
           {/* Brand Header */}
           <div
             className={`flex items-center justify-between px-6 py-5 border-b ${themeConfig.borderSubtle}`}
@@ -217,16 +219,31 @@ export default function Sidebar<T extends string = string>({
           {extraFooterWidget}
 
           {user && (
-            <div className="flex items-center gap-3">
+            <div
+              onClick={onUserProfileClick}
+              className={`flex items-center gap-3 ${
+                onUserProfileClick
+                  ? "p-2 -mx-2 rounded-xl hover:bg-white/10 transition cursor-pointer group"
+                  : ""
+              }`}
+              title={onUserProfileClick ? "Bấm để xem & chỉnh sửa hồ sơ cá nhân" : undefined}
+            >
               <div
                 className={`h-9 w-9 rounded-full flex items-center justify-center font-bold text-xs uppercase shadow-xs shrink-0 ${themeConfig.avatarBg}`}
               >
                 {user.avatarText || (user.name ? user.name.slice(0, 2) : "U")}
               </div>
               <div className="overflow-hidden flex-1">
-                <p className="text-xs font-semibold text-white truncate">
-                  {user.name || "Người dùng"}
-                </p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-white truncate group-hover:text-emerald-300">
+                    {user.name || "Người dùng"}
+                  </p>
+                  {onUserProfileClick && (
+                    <span className="text-2xs opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all text-white">
+                      →
+                    </span>
+                  )}
+                </div>
                 <p className="text-2xs text-slate-400 truncate">
                   {user.emailOrStatus || ""}
                 </p>

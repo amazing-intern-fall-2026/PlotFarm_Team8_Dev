@@ -1,6 +1,5 @@
 import apiClient from "../../services/api/apiClient";
 import {
-  DEMO_CUSTOMERS,
   INITIAL_SHARED_FARMS,
   type CareRequestStatus,
   type SharedCareRequestItem,
@@ -184,7 +183,7 @@ export function mapBackendPlotToShared(p: BackendPlotDto): SharedPlotItem {
   return {
     id: p.MaODat,
     assignedFarmerId: p.MaChuNongTrai || "NV001",
-    farmerName: p.TenChuNongTrai || "Kỹ sư nông dân",
+    farmerName: p.TenChuNongTrai || "Lê Văn Canh Tác",
     farmId: p.MaNongTrai,
     farmName: p.TenNongTrai || "Nông trại PlotFarm",
     plotCode: p.TenODat || `#PL-${p.MaODat}`,
@@ -223,7 +222,7 @@ export function mapBackendContractToShared(c: BackendContractDto): SharedContrac
     farmName: c.TenNongTrai || "Nông trại PlotFarm",
     customerId: c.MaKH,
     customerName: c.TenKH || "Khách hàng",
-    assignedFarmerName: c.TenChuNongTrai || "Kỹ sư canh tác PlotFarm",
+    assignedFarmerName: c.TenChuNongTrai || "Lê Văn Canh Tác",
     plantCrop: c.TenCayTrong || "Cây trồng nông nghiệp",
     startDate: startStr,
     endDate: endStr,
@@ -342,34 +341,7 @@ export function mapBackendHarvestToShared(dto: BackendHarvestDto): SharedHarvest
   };
 }
 
-// ─── Local Storage Keys & Event Dispatcher ────────────────────────────────────
-const STORAGE_KEYS = {
-  PLOTS: "pf_farmer_plots",
-  LOGS: "pf_farmer_logs",
-  REQUESTS: "pf_farmer_requests",
-  HARVESTS: "pf_farmer_harvests",
-  FARMS: "pf_shared_farms",
-  CUSTOMERS: "pf_customer_profiles",
-  CONTRACTS: "pf_customer_contracts",
-};
-
-function getStoredData<T>(key: string, defaultData: T): T {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) {
-      localStorage.setItem(key, JSON.stringify(defaultData));
-      return defaultData;
-    }
-    return JSON.parse(raw) as T;
-  } catch {
-    return defaultData;
-  }
-}
-
-function setStoredData<T>(key: string, data: T): void {
-  localStorage.setItem(key, JSON.stringify(data));
-}
-
+// ─── Event Dispatcher ────────────────────────────────────────────────────────
 function notifyDataChanged(eventType: string, detail?: unknown): void {
   if (typeof window !== "undefined") {
     window.dispatchEvent(
@@ -380,7 +352,7 @@ function notifyDataChanged(eventType: string, detail?: unknown): void {
   }
 }
 
-// ─── In-memory Cache for Server-Fetched Data ─────────────────────────────────
+// ─── In-memory Cache for Server-Fetched Data (No localStorage for DB records) ─
 let cachedFarms: SharedFarmItem[] = [];
 let cachedPlots: SharedPlotItem[] = [];
 let cachedCrops: BackendCropDto[] = [];
@@ -399,30 +371,28 @@ export const customerService = {
   },
 
   getAllCustomerProfiles(): Record<string, SharedCustomerProfile> {
-    return getStoredData<Record<string, SharedCustomerProfile>>(
-      STORAGE_KEYS.CUSTOMERS,
-      DEMO_CUSTOMERS,
-    );
+    const user = getCurrentUser();
+    if (user) {
+      const activeId = String(user.id || "KH001");
+      return {
+        [activeId]: {
+          id: activeId,
+          username: user.username,
+          name: user.fullName || user.username,
+          email: user.email,
+          phone: (user as unknown as { phone?: string }).phone || "",
+          shippingAddress: (user as unknown as { shippingAddress?: string }).shippingAddress || "",
+          ownedPlotCodes: [],
+          avatarIcon: "👤",
+        },
+      };
+    }
+    return {};
   },
 
   getActiveCustomerProfile(customerId?: string): SharedCustomerProfile {
     const user = getCurrentUser();
     const id = customerId || this.getActiveCustomerId();
-    const profiles = this.getAllCustomerProfiles();
-    const existing = profiles[id];
-
-    if (existing) {
-      const isMatching =
-        user &&
-        (user.id === existing.id ||
-          user.username === existing.username ||
-          (user.role && user.role.toString().toUpperCase().includes("CUSTOMER")));
-      return {
-        ...existing,
-        name: isMatching && user?.fullName ? user.fullName : existing.name,
-        email: isMatching && user?.email ? user.email : existing.email,
-      };
-    }
 
     if (user) {
       return {
@@ -437,7 +407,16 @@ export const customerService = {
       };
     }
 
-    return DEMO_CUSTOMERS.KH0001;
+    return {
+      id: id || "KH001",
+      username: "customer",
+      name: "Khách hàng",
+      email: "",
+      phone: "",
+      shippingAddress: "",
+      ownedPlotCodes: [],
+      avatarIcon: "👤",
+    };
   },
 
   // ─── Task 13: Asynchronous Farm & Plot APIs ────────────────────────────────
@@ -446,7 +425,6 @@ export const customerService = {
       const farmsDto = await apiClient.get<BackendFarmDto[]>("/farms");
       if (Array.isArray(farmsDto) && farmsDto.length > 0) {
         cachedFarms = farmsDto.map(mapBackendFarmToShared);
-        setStoredData(STORAGE_KEYS.FARMS, cachedFarms);
         return cachedFarms;
       }
     } catch (err) {
@@ -521,7 +499,7 @@ export const customerService = {
       const contractsDto = await apiClient.get<BackendContractDto[]>("/contracts/my");
       if (Array.isArray(contractsDto)) {
         cachedContracts = contractsDto.map(mapBackendContractToShared);
-        setStoredData(STORAGE_KEYS.CONTRACTS, cachedContracts);
+        notifyDataChanged("contracts_fetched", cachedContracts);
         return cachedContracts;
       }
     } catch (err) {
@@ -616,9 +594,6 @@ export const customerService = {
       if (Array.isArray(dtos)) {
         const mapped = dtos.map(mapBackendFarmingLogToShared);
         cachedLogs = mapped;
-        if (mapped.length > 0) {
-          setStoredData(STORAGE_KEYS.LOGS, mapped);
-        }
         return mapped;
       }
     } catch (err) {
@@ -634,7 +609,6 @@ export const customerService = {
       if (Array.isArray(dtos)) {
         const mapped = dtos.map(mapBackendCareRequestToShared);
         cachedRequests = mapped;
-        setStoredData(STORAGE_KEYS.REQUESTS, mapped);
         return mapped;
       }
     } catch (err) {
@@ -666,9 +640,8 @@ export const customerService = {
 
     const newRequest = mapBackendCareRequestToShared(responseDto);
 
-    // Update in-memory cache and localStorage
+    // Update in-memory cache
     cachedRequests = [newRequest, ...cachedRequests.filter((r) => r.id !== newRequest.id)];
-    setStoredData(STORAGE_KEYS.REQUESTS, cachedRequests);
 
     notifyDataChanged("care_request_created", newRequest);
     return newRequest;
@@ -681,9 +654,6 @@ export const customerService = {
       if (Array.isArray(dtos)) {
         const mapped = dtos.map(mapBackendHarvestToShared);
         cachedHarvests = mapped;
-        if (mapped.length > 0) {
-          setStoredData(STORAGE_KEYS.HARVESTS, mapped);
-        }
         return mapped;
       }
     } catch (err) {
@@ -695,7 +665,7 @@ export const customerService = {
   // ─── Synchronous Fallback Methods ──────────────────────────────────────────
   getAllFarms(): SharedFarmItem[] {
     if (cachedFarms.length > 0) return cachedFarms;
-    return getStoredData<SharedFarmItem[]>(STORAGE_KEYS.FARMS, INITIAL_SHARED_FARMS);
+    return INITIAL_SHARED_FARMS;
   },
 
   getFarmDetail(farmId: string): { farm: SharedFarmItem; plots: SharedPlotItem[] } | undefined {
@@ -712,33 +682,93 @@ export const customerService = {
   },
 
   getAllPlots(): SharedPlotItem[] {
-    if (cachedPlots.length > 0) return cachedPlots;
-    return getStoredData<SharedPlotItem[]>(
-      STORAGE_KEYS.PLOTS,
-      [],
-    );
+    return cachedPlots;
   },
 
   getMyPlots(customerId?: string): SharedPlotItem[] {
     const activeCustId = customerId || this.getActiveCustomerId();
+
+    // 1. If we have contracts loaded from backend, build plots directly from active contracts
+    if (cachedContracts.length > 0) {
+      const activeContracts = cachedContracts.filter(
+        (c) => (!c.customerId || c.customerId === activeCustId) && c.status === "ACTIVE",
+      );
+      if (activeContracts.length > 0) {
+        return activeContracts.map((c) => {
+          const matchedPlot = cachedPlots.find((p) => p.id === c.plotId);
+
+          // Look up latest farming log for this contract/plot
+          const relatedLogs = (cachedLogs || []).filter(
+            (l) => l.contractId === c.id || l.plotId === c.plotId || l.plot === c.plotCode,
+          );
+          const latestLog = relatedLogs.length > 0 ? relatedLogs[0] : null;
+
+          const progress = latestLog?.progress !== undefined
+            ? latestLog.progress
+            : (matchedPlot?.progress !== undefined ? matchedPlot.progress : 45);
+
+          const plantStatus = (latestLog?.plantStatus as any) || matchedPlot?.plantStatus || "Phát triển tốt";
+          const lastUpdate = latestLog?.date ? `Kỹ sư cập nhật (${latestLog.date})` : (matchedPlot?.lastUpdate || "Hệ thống IoT ghi nhận");
+          const engineerName = c.assignedFarmerName || matchedPlot?.farmerName || "Lê Văn Canh Tác";
+
+          return {
+            id: c.plotId,
+            plotCode: c.plotCode,
+            farmId: matchedPlot?.farmId || "",
+            farmName: c.farmName,
+            assignedFarmerId: matchedPlot?.assignedFarmerId || "",
+            farmerName: engineerName,
+            plotStatus: "IN_USE",
+            customerId: c.customerId || activeCustId,
+            customerName: c.customerName,
+            contractId: c.id,
+            plantCrop: c.plantCrop,
+            startDate: c.startDate,
+            endDate: c.endDate,
+            plantStatus: plantStatus,
+            progress: progress,
+            lastUpdate: lastUpdate,
+            areaSquareMeter: matchedPlot?.areaSquareMeter || 500,
+            rentalPricePerMonth: c.monthlyFee,
+            sensorData: matchedPlot?.sensorData || {
+              moisture: 68,
+              temperature: 26.5,
+              soilPh: 6.5,
+              lightLux: 15000,
+              lastUpdated: "Thời gian thực (IoT)",
+            },
+            cameraFeedUrl: matchedPlot?.cameraFeedUrl || "https://images.unsplash.com/photo-1592417817098-8f3d6910985b?w=1200&auto=format&fit=crop&q=80",
+            plotThumbnail: matchedPlot?.plotThumbnail || "https://images.unsplash.com/photo-1592417817098-8f3d6910985b?w=600&auto=format&fit=crop&q=80",
+          };
+        });
+      }
+    }
+
     const profile = this.getActiveCustomerProfile(activeCustId);
     const allPlots = this.getAllPlots();
 
     return allPlots.filter(
       (plot) =>
         plot.customerId === activeCustId ||
-        plot.customerName.toLowerCase().includes(profile.name.toLowerCase()) ||
+        (plot.customerName && profile.name && plot.customerName.toLowerCase().includes(profile.name.toLowerCase())) ||
         profile.ownedPlotCodes.includes(plot.plotCode),
     );
   },
 
   getPlotByCode(plotCode: string): SharedPlotItem | undefined {
     const all = this.getAllPlots();
-    return all.find((p) => p.plotCode === plotCode || p.id === plotCode);
+    const found = all.find((p) => p.plotCode === plotCode || p.id === plotCode);
+    if (found) return found;
+    return this.getMyPlots().find((p) => p.plotCode === plotCode || p.id === plotCode);
   },
 
   getMyContracts(customerId?: string): SharedContractItem[] {
     const activeCustId = customerId || this.getActiveCustomerId();
+    if (cachedContracts.length > 0) {
+      const filtered = cachedContracts.filter((c) => !c.customerId || c.customerId === activeCustId);
+      return filtered.length > 0 ? filtered : cachedContracts;
+    }
+
     const profile = this.getActiveCustomerProfile(activeCustId);
     const myPlots = this.getMyPlots(activeCustId);
 
@@ -762,11 +792,7 @@ export const customerService = {
 
   // 4. Farming Logs
   getAllFarmingLogs(): SharedFarmingLogItem[] {
-    if (cachedLogs.length > 0) return cachedLogs;
-    return getStoredData<SharedFarmingLogItem[]>(
-      STORAGE_KEYS.LOGS,
-      [],
-    );
+    return cachedLogs;
   },
 
   getMyFarmingLogs(customerId?: string): SharedFarmingLogItem[] {
@@ -778,11 +804,7 @@ export const customerService = {
 
   // 5. Care Requests
   getAllCareRequests(): SharedCareRequestItem[] {
-    if (cachedRequests.length > 0) return cachedRequests;
-    return getStoredData<SharedCareRequestItem[]>(
-      STORAGE_KEYS.REQUESTS,
-      [],
-    );
+    return cachedRequests;
   },
 
   getMyCareRequests(customerId?: string): SharedCareRequestItem[] {
@@ -830,7 +852,6 @@ export const customerService = {
 
     const updated = [newRequest, ...allRequests];
     cachedRequests = updated;
-    setStoredData(STORAGE_KEYS.REQUESTS, updated);
 
     notifyDataChanged("care_request_created", newRequest);
     return newRequest;
@@ -838,11 +859,7 @@ export const customerService = {
 
   // 6. Harvests
   getAllHarvests(): SharedHarvestItem[] {
-    if (cachedHarvests.length > 0) return cachedHarvests;
-    return getStoredData<SharedHarvestItem[]>(
-      STORAGE_KEYS.HARVESTS,
-      [],
-    );
+    return cachedHarvests;
   },
 
   getMyHarvests(customerId?: string): SharedHarvestItem[] {

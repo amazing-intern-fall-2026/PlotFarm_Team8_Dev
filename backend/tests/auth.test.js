@@ -27,6 +27,8 @@ const mockAuthRepo = {
   invalidateActiveOtpsByUsername: jest.fn(),
   markOtpAsUsed: jest.fn(),
   updateAccountPassword: jest.fn(),
+  updateCustomerProfile: jest.fn(),
+  updateEmployeeProfile: jest.fn(),
 };
 
 const mockEmailService = {
@@ -48,6 +50,8 @@ const {
   validateLogin,
   validateForgotPassword,
   validateResetPassword,
+  validateUpdateProfile,
+  validateChangePassword,
 } = await import('../src/validators/authValidator.js');
 
 describe('Authentication Test Suite', () => {
@@ -368,8 +372,11 @@ describe('Authentication Test Suite', () => {
       expect(response.user).toEqual({
         id: 'KH001',
         accountId: 'khach01',
+        username: 'khach01',
         fullName: 'Tran Van Khach',
         email: 'khach@gmail.com',
+        phone: '',
+        shippingAddress: '',
         userType: 'CUSTOMER',
         role: 'CUSTOMER',
       });
@@ -533,6 +540,75 @@ describe('Authentication Test Suite', () => {
       expect(result.username).toBe('farmer1');
       expect(mockAuthRepo.updateAccountPassword).toHaveBeenCalled();
       expect(mockAuthRepo.markOtpAsUsed).toHaveBeenCalledWith(42, mockTransaction);
+    });
+
+    test('updateUserProfile should update customer profile successfully', async () => {
+      mockAuthRepo.updateCustomerProfile.mockResolvedValueOnce(true);
+      mockAuthRepo.getCustomerById.mockResolvedValueOnce({
+        id: 'KH001',
+        fullName: 'Nguyễn Văn Customer Mới',
+        email: 'customer@plotfarm.com',
+        phone: '0901234567',
+        shippingAddress: '123 Đường Mới',
+        username: 'cust1',
+      });
+
+      const result = await authService.updateUserProfile(
+        {
+          fullName: 'Nguyễn Văn Customer Mới',
+          phone: '0901234567',
+          shippingAddress: '123 Đường Mới',
+        },
+        { userId: 'KH001', userType: 'CUSTOMER', accountId: 'cust1', role: 'CUSTOMER' }
+      );
+
+      expect(mockAuthRepo.updateCustomerProfile).toHaveBeenCalledWith(
+        'KH001',
+        expect.objectContaining({
+          fullName: 'Nguyễn Văn Customer Mới',
+          phone: '0901234567',
+          shippingAddress: '123 Đường Mới',
+        })
+      );
+      expect(result.fullName).toBe('Nguyễn Văn Customer Mới');
+    });
+
+    test('changeUserPassword should succeed when old password matches', async () => {
+      const hashedOld = await bcrypt.hash('OldPass123', 10);
+      mockAuthRepo.findAccountByUsername.mockResolvedValueOnce({
+        TenDangNhap: 'admin1',
+        MatKhauHash: hashedOld,
+      });
+      mockAuthRepo.updateAccountPassword.mockResolvedValueOnce(true);
+
+      const result = await authService.changeUserPassword(
+        {
+          oldPassword: 'OldPass123',
+          newPassword: 'NewPassword456',
+        },
+        { accountId: 'admin1' }
+      );
+
+      expect(result.message).toBe('Đổi mật khẩu thành công!');
+      expect(mockAuthRepo.updateAccountPassword).toHaveBeenCalled();
+    });
+
+    test('changeUserPassword should fail when old password is wrong', async () => {
+      const hashedOld = await bcrypt.hash('CorrectPass', 10);
+      mockAuthRepo.findAccountByUsername.mockResolvedValueOnce({
+        TenDangNhap: 'admin1',
+        MatKhauHash: hashedOld,
+      });
+
+      await expect(
+        authService.changeUserPassword(
+          {
+            oldPassword: 'WrongPassword',
+            newPassword: 'NewPassword456',
+          },
+          { accountId: 'admin1' }
+        )
+      ).rejects.toThrow('Mật khẩu hiện tại không chính xác');
     });
   });
 });
