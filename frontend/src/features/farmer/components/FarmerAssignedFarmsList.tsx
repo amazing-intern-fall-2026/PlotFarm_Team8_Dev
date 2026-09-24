@@ -35,11 +35,23 @@ export default function FarmerAssignedFarmsList({
       <div className="grid grid-cols-1 sm:grid-cols-3 py-2.5 border-b border-gray-100 gap-1">
         <span className="font-semibold text-gray-500">4. Nông trại phụ trách (Assigned Farm):</span>
         <div className="sm:col-span-2 space-y-2">
-          {profile.assignedFarms && profile.assignedFarms.length > 0 ? (
-            profile.assignedFarms.map((farm, idx) => (
+          {(() => {
+            const plotFarms = Array.from(new Set(plots.map((p) => p.farmName).filter(Boolean)));
+            const displayFarms =
+              plotFarms.length > 0
+                ? plotFarms
+                : profile.assignedFarms && profile.assignedFarms.length > 0
+                ? profile.assignedFarms
+                : [];
+
+            if (displayFarms.length === 0) {
+              return <span className="text-gray-400 italic">Chưa được phân công trang trại</span>;
+            }
+
+            return displayFarms.map((farm, idx) => (
               <div
                 key={idx}
-                className="flex items-center justify-between p-2.5 rounded-xl bg-emerald-50/70 border border-emerald-200/70 text-emerald-950"
+                className="flex items-center justify-between p-2.5 rounded-xl bg-emerald-50/70 border border-emerald-200/70 text-emerald-950 shadow-2xs"
               >
                 <div className="flex items-center gap-2">
                   <span className="text-lg">🏡</span>
@@ -50,14 +62,12 @@ export default function FarmerAssignedFarmsList({
                     </p>
                   </div>
                 </div>
-                <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-2xs font-semibold">
+                <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-2xs font-semibold whitespace-nowrap">
                   Chính thức
                 </span>
               </div>
-            ))
-          ) : (
-            <span className="text-gray-400 italic">Chưa được phân công trang trại</span>
-          )}
+            ));
+          })()}
         </div>
       </div>
 

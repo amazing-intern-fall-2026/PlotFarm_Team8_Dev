@@ -7,6 +7,8 @@ import type {
   AdminCareRequest,
   AdminHarvest,
   AdminUser,
+  AdminPayment,
+
   CreateFarmPayload,
   UpdateFarmPayload,
   CreatePlotPayload,
@@ -184,4 +186,36 @@ export const adminService = {
     ]);
     return { contracts, careRequests };
   },
+  // ─── 8. Payments Management ────────────────────────────────────────────────
+  async fetchPayments(filters?: { trangThai?: string; phuongThuc?: string }): Promise<AdminPayment[]> {
+    const url = buildUrl('/payments', {
+      trangThai: filters?.trangThai,
+      phuongThuc: filters?.phuongThuc,
+    });
+    return apiClient.get<AdminPayment[]>(url);
+  },
+
+  async getPaymentById(id: string): Promise<AdminPayment> {
+    return apiClient.get<AdminPayment>(`/payments/${id}`);
+  },
+
+  // ─── 9. Farmer Partner Applications Management ──────────────────────────────
+  async fetchFarmerApplications(status?: string): Promise<import('./admin.types').FarmerApplication[]> {
+    const url = buildUrl('/admin/farmer-applications', { status });
+    return apiClient.get<import('./admin.types').FarmerApplication[]>(url);
+  },
+
+  async getFarmerApplicationById(id: string): Promise<import('./admin.types').FarmerApplication> {
+    return apiClient.get<import('./admin.types').FarmerApplication>(`/admin/farmer-applications/${id}`);
+  },
+
+  async approveFarmerApplication(id: string): Promise<import('./admin.types').ApproveApplicationResponse> {
+    return apiClient.post<import('./admin.types').ApproveApplicationResponse>(`/admin/farmer-applications/${id}/approve`, {});
+  },
+
+  async rejectFarmerApplication(id: string, reason?: string): Promise<any> {
+    return apiClient.post(`/admin/farmer-applications/${id}/reject`, { reason });
+  },
 };
+
+

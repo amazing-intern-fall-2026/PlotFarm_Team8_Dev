@@ -1,6 +1,20 @@
 import { successResponse, errorResponse } from '../utils/response.js';
 import { AppError } from '../utils/AppError.js';
 import * as authService from '../services/authService.js';
+import * as farmerAppService from '../services/farmerApplicationService.js';
+
+export const applyFarmer = async (req, res, next) => {
+  try {
+    const result = await farmerAppService.submitApplication(req.body);
+    successResponse(res, {
+      message: result.message,
+      data: result,
+      statusCode: 201,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
 
 export const register = async (req, res, next) => {
   try {

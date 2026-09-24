@@ -8,6 +8,7 @@ import {
   resetPassword,
   updateProfile,
   changePassword,
+  applyFarmer,
 } from '../controllers/authController.js';
 import {
   validateRegister,
@@ -24,6 +25,7 @@ import authorize from '../middlewares/authorize.js';
 const router = express.Router();
 
 router.post('/register', validateRegister, register);
+router.post('/farmer-register', applyFarmer);
 router.post('/register-employee', authenticate, authorize('ADMIN'), validateRegisterEmployee, registerEmployee);
 router.post('/login', validateLogin, login);
 router.post('/forgot-password', validateForgotPassword, forgotPassword);

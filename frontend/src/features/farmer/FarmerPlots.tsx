@@ -1,11 +1,14 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { farmerService } from "./farmer.service";
-import type { FarmerPlotItem, PlantGrowthStage, PlotStatus, FarmerProfileData } from "./farmer.types";
+import type { FarmerPlotItem, PlantGrowthStage, PlotStatus, FarmerProfileData, HarvestItem } from "./farmer.types";
 import { Card, Badge, Button, Modal, Input, Alert } from "../../components/ui";
 
 export default function FarmerPlots() {
+  const navigate = useNavigate();
   const [profile, setProfile] = useState<FarmerProfileData>(() => farmerService.getFarmerProfile());
   const [plots, setPlots] = useState<FarmerPlotItem[]>(() => farmerService.getPlots());
+  const [harvests, setHarvests] = useState<HarvestItem[]>(() => farmerService.getHarvests());
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedFarm, setSelectedFarm] = useState<string>("ALL");
   const [selectedStatus, setSelectedStatus] = useState<string>("ALL");
@@ -18,6 +21,7 @@ export default function FarmerPlots() {
     function handleSync() {
       setProfile(farmerService.getFarmerProfile());
       setPlots(farmerService.getPlots());
+      setHarvests(farmerService.getHarvests());
     }
     window.addEventListener("pf_farmer_changed", handleSync);
     window.addEventListener("pf_data_changed", handleSync);
@@ -50,6 +54,23 @@ export default function FarmerPlots() {
   });
 
   function handleOpenEdit(plot: FarmerPlotItem) {
+    const plotHarvest =
+      harvests.find(
+        (h) =>
+          h.plot === plot.plotCode ||
+          h.plot === plot.id ||
+          (plot.contractId && (h.plot === plot.contractId || h.id === plot.contractId))
+      ) || (plot.harvestId ? harvests.find((h) => h.id === plot.harvestId) : undefined);
+
+    if (
+      plotHarvest?.deliveryStatus === "DELIVERED" ||
+      plot.deliveryStatus === "DELIVERED" ||
+      plot.plantStatus === "Đã giao hàng"
+    ) {
+      alert("Thửa đất này đã hoàn tất thu hoạch và giao hàng cho khách hàng. Vụ mùa đã kết thúc, không thể chỉnh sửa hoặc cập nhật nữa.");
+      return;
+    }
+
     setEditingPlot(plot);
     setEditProgress(plot.progress);
     setEditPlantStatus(plot.plantStatus);
@@ -57,6 +78,29 @@ export default function FarmerPlots() {
 
   async function handleSaveEdit() {
     if (!editingPlot) return;
+    const plotHarvest =
+      harvests.find(
+        (h) =>
+          h.plot === editingPlot.plotCode ||
+          h.plot === editingPlot.id ||
+          (editingPlot.contractId && (h.plot === editingPlot.contractId || h.id === editingPlot.contractId))
+      ) || (editingPlot.harvestId ? harvests.find((h) => h.id === editingPlot.harvestId) : undefined);
+
+    if (
+      plotHarvest?.deliveryStatus === "DELIVERED" ||
+      editingPlot.deliveryStatus === "DELIVERED" ||
+      editingPlot.plantStatus === "Đã giao hàng"
+    ) {
+      alert("Thửa đất này đã hoàn tất giao hàng cho khách hàng. Vụ mùa đã kết thúc, không thể chỉnh sửa.");
+      setEditingPlot(null);
+      return;
+    }
+
+    if ((editPlantStatus === "Giai đoạn thu hoạch" || editPlantStatus === "Đã thu hoạch") && editProgress < 95) {
+      alert(`Tiến độ mùa vụ hiện tại (${editProgress}%) chưa đạt chuẩn. Quy định yêu cầu tiến độ phải đạt từ 95% trở lên mới được chuyển sang "${editPlantStatus}".`);
+      return;
+    }
+
     setIsSaving(true);
     try {
       const updated = await farmerService.updatePlotAsync(editingPlot.id, editProgress, editPlantStatus);
@@ -88,6 +132,12 @@ export default function FarmerPlots() {
 
   function getPlantStatusColor(status: PlantGrowthStage) {
     switch (status) {
+      case "Đã giao hàng":
+        return "text-emerald-800 font-bold";
+      case "Đã thu hoạch":
+        return "text-blue-800 font-semibold";
+      case "Giai đoạn thu hoạch":
+        return "text-amber-700 font-semibold";
       case "Phát triển tốt":
         return "text-emerald-700 font-semibold";
       case "Đang ra hoa":
@@ -217,88 +267,173 @@ export default function FarmerPlots() {
                 </td>
               </tr>
             ) : (
-              filteredPlots.map((plot) => (
-                <tr key={plot.id} className="hover:bg-gray-50/70 transition">
-                  {/* Plot code */}
-                  <td className="py-3.5 px-3 font-mono font-bold text-emerald-800 whitespace-nowrap">
-                    {plot.plotCode}
-                  </td>
+              filteredPlots.map((plot) => {
+                const plotHarvest =
+                  harvests.find(
+                    (h) =>
+                      h.plot === plot.plotCode ||
+                      h.plot === plot.id ||
+                      (plot.contractId && (h.plot === plot.contractId || h.id === plot.contractId))
+                  ) ||
+                  (plot.harvestId ? harvests.find((h) => h.id === plot.harvestId) : undefined);
 
-                  {/* Farm name */}
-                  <td className="py-3.5 px-3 font-medium text-gray-900 max-w-[160px] truncate" title={plot.farmName}>
-                    {plot.farmName}
-                  </td>
+                const isDelivered =
+                  plotHarvest?.deliveryStatus === "DELIVERED" ||
+                  plot.deliveryStatus === "DELIVERED" ||
+                  plot.plantStatus === "Đã giao hàng";
 
-                  {/* Customer name */}
-                  <td className="py-3.5 px-3 text-gray-800 font-medium">
-                    {plot.customerName}
-                  </td>
+                const isHarvested =
+                  !isDelivered &&
+                  (plotHarvest?.harvestStatus === "HARVESTED" ||
+                    plot.harvestStatus === "HARVESTED" ||
+                    plot.plantStatus === "Đã thu hoạch");
 
-                  {/* Contract ID */}
-                  <td className="py-3.5 px-3 font-mono text-gray-500 whitespace-nowrap">
-                    {plot.contractId}
-                  </td>
+                return (
+                  <tr key={plot.id} className="hover:bg-gray-50/70 transition">
+                    {/* Plot code */}
+                    <td className="py-3.5 px-3 font-mono font-bold text-emerald-800 whitespace-nowrap">
+                      {plot.plotCode}
+                    </td>
 
-                  {/* Plant / Crop */}
-                  <td className="py-3.5 px-3 font-medium text-emerald-900 whitespace-nowrap">
-                    {plot.plantCrop}
-                  </td>
+                    {/* Farm name */}
+                    <td className="py-3.5 px-3 font-medium text-gray-900 max-w-[160px] truncate" title={plot.farmName}>
+                      {plot.farmName}
+                    </td>
 
-                  {/* Plant status */}
-                  <td className={`py-3.5 px-3 whitespace-nowrap ${getPlantStatusColor(plot.plantStatus)}`}>
-                    {plot.plantStatus}
-                  </td>
+                    {/* Customer name */}
+                    <td className="py-3.5 px-3 text-gray-800 font-medium">
+                      {plot.customerName}
+                    </td>
 
-                  {/* Progress (%) */}
-                  <td className="py-3.5 px-3">
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between text-2xs text-gray-600">
-                        <span className="font-bold">{plot.progress}%</span>
+                    {/* Contract ID */}
+                    <td className="py-3.5 px-3 font-mono text-gray-500 whitespace-nowrap">
+                      {plot.contractId}
+                    </td>
+
+                    {/* Plant / Crop */}
+                    <td className="py-3.5 px-3 font-medium text-emerald-900 whitespace-nowrap">
+                      {plot.plantCrop}
+                    </td>
+
+                    {/* Plant status */}
+                    <td className="py-3.5 px-3 whitespace-nowrap">
+                      {isDelivered ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-2xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                          <span>🚚</span>
+                          <span>Đã giao hàng</span>
+                        </span>
+                      ) : isHarvested ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-2xs font-bold bg-blue-100 text-blue-800 border border-blue-300">
+                          <span>📦</span>
+                          <span>Đã thu hoạch</span>
+                        </span>
+                      ) : (
+                        <span className={getPlantStatusColor(plot.plantStatus)}>
+                          {plot.plantStatus}
+                        </span>
+                      )}
+                    </td>
+
+                    {/* Progress (%) */}
+                    <td className="py-3.5 px-3">
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between text-2xs text-gray-600">
+                          <span className="font-bold">{plot.progress}%</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
+                          <div
+                            className={`h-1.5 rounded-full transition-all duration-300 ${
+                              plot.progress > 80
+                                ? "bg-amber-500"
+                                : plot.progress > 40
+                                ? "bg-emerald-600"
+                                : "bg-blue-500"
+                            }`}
+                            style={{ width: `${plot.progress}%` }}
+                          />
+                        </div>
                       </div>
-                      <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
-                        <div
-                          className={`h-1.5 rounded-full transition-all duration-300 ${
-                            plot.progress > 80
-                              ? "bg-amber-500"
-                              : plot.progress > 40
-                              ? "bg-emerald-600"
-                              : "bg-blue-500"
-                          }`}
-                          style={{ width: `${plot.progress}%` }}
-                        />
+                    </td>
+
+                    {/* Start date -> End date */}
+                    <td className="py-3.5 px-3 text-2xs text-gray-600 whitespace-nowrap">
+                      <div>{plot.startDate}</div>
+                      <div className="text-gray-400">đến {plot.endDate}</div>
+                    </td>
+
+                    {/* Plot status */}
+                    <td className="py-3.5 px-3 whitespace-nowrap">
+                      {getStatusBadge(plot.plotStatus)}
+                    </td>
+
+                    {/* Last update */}
+                    <td className="py-3.5 px-3 text-2xs text-gray-500 whitespace-nowrap">
+                      {plot.lastUpdate}
+                    </td>
+
+                    {/* Action */}
+                    <td className="py-3.5 px-3 text-right whitespace-nowrap">
+                      <div className="flex items-center justify-end gap-1.5">
+                        {isDelivered ? (
+                          <button
+                            type="button"
+                            onClick={() => navigate("/farmer/harvest")}
+                            className="px-2.5 py-1 text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                            title="Đơn hàng đã hoàn tất giao hàng thành công. Vụ mùa đã kết thúc, không thể chỉnh sửa."
+                          >
+                            <span>🚚</span>
+                            <span>Đã giao hàng (Hoàn tất)</span>
+                          </button>
+                        ) : isHarvested ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => navigate("/farmer/harvest")}
+                              className="px-2.5 py-1 text-xs font-semibold text-blue-800 bg-blue-50 hover:bg-blue-100 border border-blue-300 rounded transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                              title="Đã thu hoạch xong, đang sơ chế đóng gói hoặc vận chuyển. Bấm để xem chi tiết."
+                            >
+                              <span>📦</span>
+                              <span>Đã thu hoạch</span>
+                            </button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              fullWidth={false}
+                              onClick={() => handleOpenEdit(plot)}
+                            >
+                              Cập nhật
+                            </Button>
+                          </>
+                        ) : (
+                          <>
+                            {plot.progress >= 95 && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  navigate(`/farmer/harvest?create=true&plot=${encodeURIComponent(plot.plotCode)}`)
+                                }
+                                className="px-2.5 py-1 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                                title="Lập phiếu thu hoạch cho thửa đất này (Tiến độ ≥ 95%)"
+                              >
+                                <span>🌾</span>
+                                <span>Thu hoạch</span>
+                              </button>
+                            )}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              fullWidth={false}
+                              onClick={() => handleOpenEdit(plot)}
+                            >
+                              Cập nhật
+                            </Button>
+                          </>
+                        )}
                       </div>
-                    </div>
-                  </td>
-
-                  {/* Start date -> End date */}
-                  <td className="py-3.5 px-3 text-2xs text-gray-600 whitespace-nowrap">
-                    <div>{plot.startDate}</div>
-                    <div className="text-gray-400">đến {plot.endDate}</div>
-                  </td>
-
-                  {/* Plot status */}
-                  <td className="py-3.5 px-3 whitespace-nowrap">
-                    {getStatusBadge(plot.plotStatus)}
-                  </td>
-
-                  {/* Last update */}
-                  <td className="py-3.5 px-3 text-2xs text-gray-500 whitespace-nowrap">
-                    {plot.lastUpdate}
-                  </td>
-
-                  {/* Action */}
-                  <td className="py-3.5 px-3 text-right whitespace-nowrap">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      fullWidth={false}
-                      onClick={() => handleOpenEdit(plot)}
-                    >
-                      Cập nhật
-                    </Button>
-                  </td>
-                </tr>
-              ))
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
@@ -348,7 +483,7 @@ export default function FarmerPlots() {
             <div className="flex justify-between text-2xs text-gray-400 mt-1">
               <span>0% (Mới gieo)</span>
               <span>50% (Phát triển)</span>
-              <span>100% (Hoàn tất thu hoạch)</span>
+              <span>95%+ (Giai đoạn thu hoạch)</span>
             </div>
           </div>
 
@@ -365,6 +500,13 @@ export default function FarmerPlots() {
               <option value="Phát triển tốt">Phát triển tốt</option>
               <option value="Đang ra hoa">Đang ra hoa</option>
               <option value="Chuẩn bị thu hoạch">Chuẩn bị thu hoạch</option>
+              <option value="Giai đoạn thu hoạch" disabled={editProgress < 95}>
+                Giai đoạn thu hoạch {editProgress < 95 ? "(Yêu cầu tiến độ ≥ 95%)" : ""}
+              </option>
+              <option value="Đã thu hoạch" disabled={editProgress < 95}>
+                Đã thu hoạch {editProgress < 95 ? "(Yêu cầu tiến độ ≥ 95%)" : ""}
+              </option>
+              <option value="Đã giao hàng" disabled>Đã giao hàng (Tự động cập nhật sau khi giao)</option>
               <option value="Cần chú ý chăm sóc">Cần chú ý chăm sóc</option>
             </select>
           </div>

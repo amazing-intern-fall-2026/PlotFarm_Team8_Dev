@@ -198,7 +198,7 @@ export default function FarmerProfile() {
                 </span>
               ) : (
                 <span className="text-2xs text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 font-medium">
-                  {profile.assignedFarms.length} Trang trại được giao
+                  {Array.from(new Set(plots.map((p) => p.farmName).filter(Boolean))).length || profile.assignedFarms.length || 1} Trang trại được giao
                 </span>
               )}
             </h3>

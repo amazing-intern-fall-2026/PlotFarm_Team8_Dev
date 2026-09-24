@@ -101,7 +101,7 @@ export const checkContract = async (maHopDong) => {
     request.input('maHopDong', sql.VarChar, maHopDong);
 
     const result = await request.query(`
-        SELECT HD.*, KH.DiaChiNhanHang
+        SELECT HD.*, KH.DiaChi AS DiaChiNhanHang, KH.DiaChi
         FROM dbo.HOPDONGTHUE HD
         LEFT JOIN dbo.KHACHHANG KH ON HD.MaKH = KH.MaKH
         WHERE HD.MaHopDong = @maHopDong
@@ -113,11 +113,15 @@ export const createHarvest = async (data) => {
     const pool = getPool();
     const maThuHoach = await generateIncrementalId(pool, 'THUHOACH', 'MaThuHoach', 'TH', 3);
 
-    const request = new sql.Request(pool);
+    const sanLuongDuKienVal = data.SanLuongDuKien != null ? String(data.SanLuongDuKien) : null;
+    const sanLuongThucTeVal = data.SanLuongThucTe != null ? (typeof data.SanLuongThucTe === 'number' ? `${data.SanLuongThucTe} kg` : String(data.SanLuongThucTe)) : null;
+
     request.input('maThuHoach',          sql.VarChar,   maThuHoach);
     request.input('maHopDong',           sql.VarChar,   data.MaHopDong);
     request.input('ngayThuHoachDuKien',  sql.Date,      data.NgayThuHoachDuKien);
-    request.input('sanLuongDuKien',      sql.NVarChar,  data.SanLuongDuKien);
+    request.input('ngayThuHoachThucTe',  sql.Date,      data.NgayThuHoachThucTe || null);
+    request.input('sanLuongDuKien',      sql.NVarChar,  sanLuongDuKienVal);
+    request.input('sanLuongThucTe',      sql.NVarChar,  sanLuongThucTeVal);
     request.input('trangThaiThuHoach',   sql.VarChar,   data.TrangThaiThuHoach || 'SCHEDULED');
     request.input('trangThaiDongGoi',    sql.VarChar,   data.TrangThaiDongGoi || 'NOT_PACKED');
     request.input('trangThaiGiaoHang',   sql.VarChar,   data.TrangThaiGiaoHang || 'WAITING_PICKUP');
@@ -126,12 +130,14 @@ export const createHarvest = async (data) => {
 
     const result = await request.query(`
         INSERT INTO dbo.THUHOACH
-            (MaThuHoach, MaHopDong, NgayThuHoachDuKien, SanLuongDuKien,
+            (MaThuHoach, MaHopDong, NgayThuHoachDuKien, NgayThuHoachThucTe,
+             SanLuongDuKien, SanLuongThucTe,
              TrangThaiThuHoach, TrangThaiDongGoi, TrangThaiGiaoHang,
              DiaChiGiaoHang, GhiChu)
         OUTPUT INSERTED.*
         VALUES
-            (@maThuHoach, @maHopDong, @ngayThuHoachDuKien, @sanLuongDuKien,
+            (@maThuHoach, @maHopDong, @ngayThuHoachDuKien, @ngayThuHoachThucTe,
+             @sanLuongDuKien, @sanLuongThucTe,
              @trangThaiThuHoach, @trangThaiDongGoi, @trangThaiGiaoHang,
              @diaChiGiaoHang, @ghiChu)
     `);
@@ -154,11 +160,13 @@ export const updateHarvest = async (id, data) => {
         setClauses.push('NgayThuHoachThucTe = @ngayThuHoachThucTe');
     }
     if (data.SanLuongDuKien !== undefined) {
-        request.input('sanLuongDuKien', sql.NVarChar, data.SanLuongDuKien);
+        const val = data.SanLuongDuKien != null ? String(data.SanLuongDuKien) : null;
+        request.input('sanLuongDuKien', sql.NVarChar, val);
         setClauses.push('SanLuongDuKien = @sanLuongDuKien');
     }
     if (data.SanLuongThucTe !== undefined) {
-        request.input('sanLuongThucTe', sql.NVarChar, data.SanLuongThucTe);
+        const val = data.SanLuongThucTe != null ? (typeof data.SanLuongThucTe === 'number' ? `${data.SanLuongThucTe} kg` : String(data.SanLuongThucTe)) : null;
+        request.input('sanLuongThucTe', sql.NVarChar, val);
         setClauses.push('SanLuongThucTe = @sanLuongThucTe');
     }
     if (data.TrangThaiThuHoach !== undefined) {

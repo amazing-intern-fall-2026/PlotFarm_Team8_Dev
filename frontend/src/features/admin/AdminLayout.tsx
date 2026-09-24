@@ -13,11 +13,12 @@ import AdminContracts from "./AdminContracts";
 import AdminCareRequests from "./AdminCareRequests";
 import AdminHarvestDelivery from "./AdminHarvestDelivery";
 import AdminUsers from "./AdminUsers";
+import AdminPayments from "./AdminPayments";
 import AdminProfile from "./AdminProfile";
 import { adminService } from "./admin.service";
 import type { AdminKPIData } from "./admin.types";
 
-export type AdminTab = "dashboard" | "farms-plots" | "contracts" | "requests" | "harvest" | "users" | "profile";
+export type AdminTab = "dashboard" | "farms-plots" | "contracts" | "payments" | "requests" | "harvest" | "users" | "profile";
 
 export default function AdminLayout() {
   const navigate = useNavigate();
@@ -37,6 +38,7 @@ export default function AdminLayout() {
     if (path.includes("/admin/farms-plots") || path.includes("/admin/plots") || path.includes("/admin/farms"))
       return "farms-plots";
     if (path.includes("/admin/contracts")) return "contracts";
+    if (path.includes("/admin/payments")) return "payments";
     if (path.includes("/admin/requests")) return "requests";
     if (path.includes("/admin/harvest")) return "harvest";
     if (path.includes("/admin/users")) return "users";
@@ -99,6 +101,7 @@ export default function AdminLayout() {
       badge: totalPlotsCount ? `${totalPlotsCount} thửa` : undefined,
     },
     { id: "contracts", label: "Hợp đồng thuê đất", icon: "📜" },
+    { id: "payments", label: "Quản lý thanh toán", icon: "💳" },
     {
       id: "requests",
       label: "Yêu cầu chăm sóc",
@@ -198,6 +201,8 @@ export default function AdminLayout() {
           {activeTab === "farms-plots" && <AdminFarmsPlots />}
 
           {activeTab === "contracts" && <AdminContracts />}
+
+          {activeTab === "payments" && <AdminPayments />}
 
           {activeTab === "requests" && <AdminCareRequests />}
 

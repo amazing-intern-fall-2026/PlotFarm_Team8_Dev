@@ -17,44 +17,78 @@ interface TaskItem {
   priority: "high" | "medium" | "low";
 }
 
+function getDailyTasksStorageKey(farmerId: string): string {
+  const dateStr = new Date().toLocaleDateString("vi-VN").replace(/\//g, "-");
+  return `pf_farmer_daily_tasks_${farmerId}_${dateStr}`;
+}
+
+function loadSavedDailyTasks(farmerId: string): Record<string, boolean> {
+  try {
+    const raw = localStorage.getItem(getDailyTasksStorageKey(farmerId));
+    if (raw) return JSON.parse(raw);
+  } catch (err) {
+    console.warn("loadSavedDailyTasks error:", err);
+  }
+  return {};
+}
+
+function saveDailyTasks(farmerId: string, taskState: Record<string, boolean>): void {
+  try {
+    localStorage.setItem(getDailyTasksStorageKey(farmerId), JSON.stringify(taskState));
+  } catch (err) {
+    console.warn("saveDailyTasks error:", err);
+  }
+}
+
 function generateTasksForFarmer(farmerId: string): TaskItem[] {
   const currentPlots = farmerService.getPlots(farmerId);
   const p1 = currentPlots[0]?.plotCode || "#PL-0192";
   const p2 = currentPlots[1]?.plotCode || p1;
-  return [
+  const savedState = loadSavedDailyTasks(farmerId);
+
+  const baseTasks = [
     {
       id: "t1",
       title: `Kiểm tra độ ẩm và cảm biến đất (Thửa ${p1})`,
       timeInfo: "07:30 Sáng • Định kỳ hàng ngày",
       plotCode: p1,
-      completed: true,
-      priority: "high",
+      defaultCompleted: false,
+      priority: "high" as const,
     },
     {
       id: "t2",
       title: `Kiểm tra sâu bệnh & chăm sóc thực địa (Thửa ${p2})`,
       timeInfo: "10:00 Sáng • Theo quy trình VietGAP",
       plotCode: p2,
-      completed: false,
-      priority: "medium",
+      defaultCompleted: false,
+      priority: "medium" as const,
     },
     {
       id: "t3",
       title: `Ghi nhật ký canh tác cho các hoạt động trong ngày`,
       timeInfo: "14:30 Chiều • Báo cáo tới khách hàng",
       plotCode: p1,
-      completed: false,
-      priority: "high",
+      defaultCompleted: false,
+      priority: "high" as const,
     },
     {
       id: "t4",
       title: `Xử lý yêu cầu chăm sóc gửi từ khách thuê thửa`,
       timeInfo: "16:00 Chiều • Cổng tương tác PlotFarm",
       plotCode: p2,
-      completed: false,
-      priority: "medium",
+      defaultCompleted: false,
+      priority: "medium" as const,
     },
   ];
+
+  return baseTasks.map((t) => ({
+    id: t.id,
+    title: t.title,
+    timeInfo: t.timeInfo,
+    plotCode: t.plotCode,
+    completed: savedState[t.id] !== undefined ? Boolean(savedState[t.id]) : t.defaultCompleted,
+    priority: t.priority,
+  }));
 }
 
 export default function FarmerDashboard({ onNavigateTab }: FarmerDashboardProps) {
@@ -83,9 +117,15 @@ export default function FarmerDashboard({ onNavigateTab }: FarmerDashboardProps)
   }, []);
 
   function handleToggleTask(id: string) {
-    setTasks((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t)),
-    );
+    setTasks((prev) => {
+      const next = prev.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t));
+      const stateToSave: Record<string, boolean> = {};
+      next.forEach((item) => {
+        stateToSave[item.id] = item.completed;
+      });
+      saveDailyTasks(profile.id || farmerService.getActiveFarmerId(), stateToSave);
+      return next;
+    });
   }
 
   return (

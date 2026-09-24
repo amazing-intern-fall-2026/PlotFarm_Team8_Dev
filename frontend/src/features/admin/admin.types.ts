@@ -48,6 +48,16 @@ export interface AdminPlot {
   DoPH?: number | null;
   AnhSangLux?: number | null;
   UpdatedAt?: string;
+  // Thông tin hợp đồng & khách thuê hiện hành (nếu DANG_THUE)
+  MaHopDong?: string;
+  MaKH?: string;
+  TenKH?: string;
+  EmailKH?: string;
+  DienThoaiKH?: string;
+  TenCayTrong?: string;
+  NgayBatDau?: string;
+  NgayKetThuc?: string;
+  TongTienHopDong?: number;
 }
 
 export interface AdminContract {
@@ -67,10 +77,30 @@ export interface AdminContract {
   NgayBatDau: string;
   NgayKetThuc: string;
   TongTien: number;
-  depositAmount: number;
-  TrangThai: 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
+  depositAmount?: number;
+  TrangThai: 'PENDING' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
   CreatedAt?: string;
 }
+
+export interface AdminPayment {
+  MaThanhToan: string;
+  MaHopDong: string;
+  MaKH: string;
+  TenKH?: string;
+  Email?: string;
+  DienThoai?: string;
+  SoTien: number;
+  PhuongThuc: 'VIETQR' | 'VNPAY' | 'MOMO';
+  TrangThai: 'PENDING' | 'COMPLETED' | 'FAILED' | 'REFUNDED';
+  MaGiaoDich?: string | null;
+  NoiDungCK: string;
+  GhiChu?: string | null;
+  TenODat?: string;
+  TenNongTrai?: string;
+  CreatedAt: string;
+  UpdatedAt?: string;
+}
+
 
 export interface AdminCareRequest {
   MaYeuCau: string;
@@ -200,3 +230,44 @@ export interface UpdateHarvestDeliveryPayload {
   trangThaiDongGoi?: 'NOT_PACKED' | 'PACKED' | 'STORAGE_COOL';
   ghiChu?: string;
 }
+
+export interface FarmerApplication {
+  MaDon: string;
+  HoTen: string;
+  NgaySinh?: string | null;
+  GioiTinh?: string | null;
+  Email: string;
+  DienThoai: string;
+  DiaChi: string;
+  SoCCCD: string;
+  NgayCap?: string | null;
+  NoiCap?: string | null;
+  AnhCCCDMatTruoc?: string | null;
+  AnhCCCDMatSau?: string | null;
+  TenDangNhap: string;
+  KinhNghiem?: string | null;
+  TrangThai: 'PENDING' | 'APPROVED' | 'REJECTED';
+  LyDoTuChoi?: string | null;
+  NgayDangKy: string;
+  NgayXuLy?: string | null;
+  NguoiXuLy?: string | null;
+}
+
+export interface ApproveApplicationResponse {
+  applicationId: string;
+  employeeId: string;
+  username: string;
+  status: 'APPROVED';
+  smsNotification: {
+    recipientPhone: string;
+    recipientName: string;
+    citizenId?: string;
+    username: string;
+    employeeId: string;
+    status: string;
+    sentAt: string;
+    senderName: string;
+    message: string;
+  };
+}
+

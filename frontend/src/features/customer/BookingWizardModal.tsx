@@ -90,17 +90,88 @@ export default function BookingWizardModal({
   const [errorMsg, setErrorMsg] = useState<string>("");
   const [bookingResult, setBookingResult] = useState<any>(null);
 
-  // Load farms & plots on mount or when farm changes
+  // Payment 2-step state
+  const [pendingPayment, setPendingPayment] = useState<{
+    paymentId: string;
+    soTien: number;
+    noiDungCK: string;
+    bankInfo: { nganHang: string; soTaiKhoan: string; chuTaiKhoan: string };
+  } | null>(null);
+  const [isConfirming, setIsConfirming] = useState<boolean>(false);
+
+  // Bước 6a: Tạo giao dịch PENDING + hợp đồng PENDING
+  async function handleInitiatePayment() {
+    if (!selectedPlot) {
+      setErrorMsg("Vui lòng chọn thửa đất hợp lệ.");
+      return;
+    }
+    if (!agreeTerms) {
+      setErrorMsg("Vui lòng đồng ý với Điều khoản thuê đất để tiếp tục.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setErrorMsg("");
+
+    try {
+      const result = await customerService.initiatePaymentAsync({
+        plotId: selectedPlot.id,
+        cropType: selectedCrop.id,
+        durationMonths,
+        paymentMethod,
+      });
+
+      setPendingPayment({
+        paymentId: result.payment.MaThanhToan,
+        soTien: result.payment.SoTien,
+        noiDungCK: result.payment.NoiDungCK,
+        bankInfo: result.bankInfo,
+      });
+    } catch (err: any) {
+      console.error("Initiate payment error:", err);
+      setErrorMsg(err?.message || "Lỗi khi tạo giao dịch thanh toán.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  // Bước 6b: Xác nhận đã chuyển khoản → kích hoạt hợp đồng
+  async function handleConfirmPayment() {
+    if (!pendingPayment) return;
+    setIsConfirming(true);
+    setErrorMsg("");
+
+    try {
+      const result = await customerService.confirmPaymentAsync(pendingPayment.paymentId);
+      setBookingResult(result);
+      setCurrentStep(7);
+      if (onSuccess) {
+        onSuccess({ contract: result.contract, plot: selectedPlot! });
+      }
+    } catch (err: any) {
+      console.error("Confirm payment error:", err);
+      setErrorMsg(err?.message || "Lỗi khi xác nhận thanh toán.");
+    } finally {
+      setIsConfirming(false);
+    }
+  }
+
+
+  // Load live farms on open
   useEffect(() => {
     if (!isOpen) return;
 
     customerService.fetchFarmsAsync().then((liveFarms) => {
       if (liveFarms && liveFarms.length > 0) {
         setFarms(liveFarms);
+        if (!initialFarmId && (!selectedFarmId || selectedFarmId === "farm-1")) {
+          setSelectedFarmId(liveFarms[0].id);
+        }
       }
     }).catch(() => {});
-  }, [isOpen]);
+  }, [isOpen, initialFarmId]);
 
+  // Handle initial preselected props
   useEffect(() => {
     if (initialFarmId) setSelectedFarmId(initialFarmId);
     if (initialPlotId) {
@@ -111,18 +182,37 @@ export default function BookingWizardModal({
     }
   }, [initialFarmId, initialPlotId, isOpen]);
 
+  // Whenever selectedFarmId changes or modal opens, re-fetch plots for that specific farm
   useEffect(() => {
-    const farmDetail = customerService.getFarmDetail(selectedFarmId);
-    if (farmDetail) {
-      setPlots(farmDetail.plots);
-      if (!initialPlotId) {
-        const firstAvailable = farmDetail.plots.find(
-          (p) => p.plotStatus === "ACTIVE" || (p as any).status === "TRONG"
-        );
-        setSelectedPlotId(firstAvailable?.id || farmDetail.plots[0]?.id || "");
+    if (!isOpen || !selectedFarmId) return;
+
+    customerService.fetchFarmDetailAsync(selectedFarmId).then((detail) => {
+      if (detail && detail.plots && detail.plots.length > 0) {
+        setPlots(detail.plots);
+        const matched = initialPlotId ? detail.plots.find((p) => p.id === initialPlotId) : undefined;
+        if (matched) {
+          setSelectedPlotId(matched.id);
+        } else {
+          const firstAvailable = detail.plots.find(
+            (p) => p.plotStatus === "ACTIVE" || (p as any).status === "TRONG"
+          );
+          setSelectedPlotId(firstAvailable?.id || detail.plots[0]?.id || "");
+        }
+      } else {
+        const farmDetail = customerService.getFarmDetail(selectedFarmId);
+        if (farmDetail && farmDetail.plots.length > 0) {
+          setPlots(farmDetail.plots);
+          const firstAvailable = farmDetail.plots.find(
+            (p) => p.plotStatus === "ACTIVE" || (p as any).status === "TRONG"
+          );
+          setSelectedPlotId(firstAvailable?.id || farmDetail.plots[0]?.id || "");
+        } else {
+          setPlots([]);
+          setSelectedPlotId("");
+        }
       }
-    }
-  }, [selectedFarmId, initialPlotId]);
+    }).catch(() => {});
+  }, [isOpen, selectedFarmId, initialPlotId]);
 
   const selectedFarm = farms.find((f) => f.id === selectedFarmId) || farms[0];
   const selectedPlot = plots.find((p) => p.id === selectedPlotId) || plots[0];
@@ -141,39 +231,6 @@ export default function BookingWizardModal({
 
   const formatDate = (d: Date) =>
     `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
-
-  async function handleConfirmBooking() {
-    if (!selectedPlot) {
-      setErrorMsg("Vui lòng chọn thửa đất hợp lệ.");
-      return;
-    }
-    if (!agreeTerms) {
-      setErrorMsg("Vui lòng đồng ý với Điều khoản thuê đất để tiếp tục.");
-      return;
-    }
-
-    setIsSubmitting(true);
-    setErrorMsg("");
-
-    try {
-      const result = await customerService.rentPlotAsync({
-        plotId: selectedPlot.id,
-        cropType: selectedCrop.id,
-        durationMonths,
-      });
-
-      setBookingResult(result);
-      setCurrentStep(7); // Complete view
-      if (onSuccess) {
-        onSuccess(result);
-      }
-    } catch (err: any) {
-      console.error("Booking error:", err);
-      setErrorMsg(err?.message || "Lỗi khi xử lý hợp đồng thuê đất.");
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
 
   function handleReset() {
     setCurrentStep(1);
@@ -238,7 +295,10 @@ export default function BookingWizardModal({
                 return (
                   <div
                     key={farm.id}
-                    onClick={() => setSelectedFarmId(farm.id)}
+                    onClick={() => {
+                      setSelectedFarmId(farm.id);
+                      setSelectedPlotId("");
+                    }}
                     className={`p-3.5 rounded-xl border-2 transition cursor-pointer flex flex-col justify-between ${
                       isSelected
                         ? "border-emerald-600 bg-emerald-50/70 shadow-xs ring-1 ring-emerald-500/20"
@@ -574,7 +634,9 @@ export default function BookingWizardModal({
                 </div>
                 <div>
                   <span className="text-gray-500 block">Trang trại:</span>
-                  <strong className="text-gray-900 truncate block">{selectedFarm?.name}</strong>
+                  <strong className="text-gray-900 truncate block">
+                    {selectedPlot?.farmName || selectedFarm?.name}
+                  </strong>
                 </div>
                 <div>
                   <span className="text-gray-500 block">Cây trồng:</span>
@@ -627,90 +689,151 @@ export default function BookingWizardModal({
           <div className="space-y-4">
             <div>
               <h3 className="font-bold text-gray-900 text-sm">
-                Bước 6: Lựa chọn phương thức thanh toán & Kích hoạt hợp đồng
+                Bước 6: Lựa chọn phương thức thanh toán &amp; Kích hoạt hợp đồng
               </h3>
               <p className="text-2xs text-gray-500 mt-0.5">
-                Hợp đồng sẽ được kích hoạt ngay lập tức sau khi xác nhận thanh toán thành công.
+                {pendingPayment
+                  ? "Hoàn tất chuyển khoản theo thông tin bên dưới, sau đó nhấn xác nhận."
+                  : "Chọn phương thức và nhấn Tạo Giao Dịch để nhận thông tin chuyển khoản."}
               </p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div
-                onClick={() => setPaymentMethod("VIETQR")}
-                className={`p-3.5 rounded-xl border-2 transition cursor-pointer text-center space-y-1.5 ${
-                  paymentMethod === "VIETQR"
-                    ? "border-emerald-600 bg-emerald-50 shadow-xs ring-1 ring-emerald-500/20"
-                    : "border-gray-200 bg-white hover:border-emerald-300"
-                }`}
-              >
-                <span className="text-2xl">📲</span>
-                <h4 className="font-bold text-gray-900 text-xs">Chuyển Khoản VietQR</h4>
-                <p className="text-2xs text-gray-500">Quét mã QR qua ứng dụng ngân hàng</p>
-              </div>
+            {/* ── Phase 1: Chưa tạo giao dịch → chọn phương thức ── */}
+            {!pendingPayment && (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div
+                    onClick={() => setPaymentMethod("VIETQR")}
+                    className={`p-3.5 rounded-xl border-2 transition cursor-pointer text-center space-y-1.5 ${
+                      paymentMethod === "VIETQR"
+                        ? "border-emerald-600 bg-emerald-50 shadow-xs ring-1 ring-emerald-500/20"
+                        : "border-gray-200 bg-white hover:border-emerald-300"
+                    }`}
+                  >
+                    <span className="text-2xl">📲</span>
+                    <h4 className="font-bold text-gray-900 text-xs">Chuyển Khoản VietQR</h4>
+                    <p className="text-2xs text-gray-500">Quét mã QR qua ứng dụng ngân hàng</p>
+                  </div>
 
-              <div
-                onClick={() => setPaymentMethod("VNPAY")}
-                className={`p-3.5 rounded-xl border-2 transition cursor-pointer text-center space-y-1.5 ${
-                  paymentMethod === "VNPAY"
-                    ? "border-emerald-600 bg-emerald-50 shadow-xs ring-1 ring-emerald-500/20"
-                    : "border-gray-200 bg-white hover:border-emerald-300"
-                }`}
-              >
-                <span className="text-2xl">💳</span>
-                <h4 className="font-bold text-gray-900 text-xs">Cổng VNPAY / Thẻ</h4>
-                <p className="text-2xs text-gray-500">Thẻ ATM / Visa / Mastercard nội địa</p>
-              </div>
+                  <div
+                    onClick={() => setPaymentMethod("VNPAY")}
+                    className={`p-3.5 rounded-xl border-2 transition cursor-pointer text-center space-y-1.5 ${
+                      paymentMethod === "VNPAY"
+                        ? "border-emerald-600 bg-emerald-50 shadow-xs ring-1 ring-emerald-500/20"
+                        : "border-gray-200 bg-white hover:border-emerald-300"
+                    }`}
+                  >
+                    <span className="text-2xl">💳</span>
+                    <h4 className="font-bold text-gray-900 text-xs">Cổng VNPAY / Thẻ</h4>
+                    <p className="text-2xs text-gray-500">Thẻ ATM / Visa / Mastercard nội địa</p>
+                  </div>
 
-              <div
-                onClick={() => setPaymentMethod("MOMO")}
-                className={`p-3.5 rounded-xl border-2 transition cursor-pointer text-center space-y-1.5 ${
-                  paymentMethod === "MOMO"
-                    ? "border-emerald-600 bg-emerald-50 shadow-xs ring-1 ring-emerald-500/20"
-                    : "border-gray-200 bg-white hover:border-emerald-300"
-                }`}
-              >
-                <span className="text-2xl">👛</span>
-                <h4 className="font-bold text-gray-900 text-xs">Ví Điện Tử MoMo</h4>
-                <p className="text-2xs text-gray-500">Thanh toán 1 chạm qua app MoMo</p>
-              </div>
-            </div>
-
-            {/* VietQR Mock Display */}
-            {paymentMethod === "VIETQR" && (
-              <div className="p-4 rounded-xl bg-gray-50 border border-gray-200 flex flex-col sm:flex-row items-center gap-4">
-                <div className="w-32 h-32 bg-white p-2 rounded-lg border border-gray-300 flex items-center justify-center shrink-0">
-                  <div className="text-center font-mono text-2xs text-gray-600">
-                    <span className="text-3xl block">📱</span>
-                    [Mã VietQR]
-                    <span className="block font-bold text-emerald-700">PlotFarm Demo</span>
+                  <div
+                    onClick={() => setPaymentMethod("MOMO")}
+                    className={`p-3.5 rounded-xl border-2 transition cursor-pointer text-center space-y-1.5 ${
+                      paymentMethod === "MOMO"
+                        ? "border-emerald-600 bg-emerald-50 shadow-xs ring-1 ring-emerald-500/20"
+                        : "border-gray-200 bg-white hover:border-emerald-300"
+                    }`}
+                  >
+                    <span className="text-2xl">👛</span>
+                    <h4 className="font-bold text-gray-900 text-xs">Ví Điện Tử MoMo</h4>
+                    <p className="text-2xs text-gray-500">Thanh toán 1 chạm qua app MoMo</p>
                   </div>
                 </div>
-                <div className="space-y-1.5 text-2xs text-gray-700 w-full">
-                  <p><strong>Ngân hàng:</strong> TMCP Ngoại Thương Việt Nam (Vietcombank)</p>
-                  <p><strong>Số tài khoản:</strong> <span className="font-mono font-bold text-emerald-800">0071000998877</span></p>
-                  <p><strong>Chủ tài khoản:</strong> CÔNG TY CP NÔNG NGHIỆP SỐ PLOTFARM</p>
-                  <p><strong>Số tiền:</strong> <span className="font-mono font-bold text-emerald-700 text-sm">{totalAmount.toLocaleString("vi-VN")} đ</span></p>
-                  <p><strong>Nội dung:</strong> <span className="font-mono bg-white px-2 py-0.5 rounded border border-gray-200 text-emerald-900">PF THUE {selectedPlot?.plotCode} {currentUser?.username || "KH"}</span></p>
+
+                <div className="flex justify-between pt-3 border-t border-gray-100">
+                  <Button variant="outline" size="sm" onClick={() => setCurrentStep(5)} disabled={isSubmitting}>
+                    ⬅ Quay lại
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold"
+                    onClick={handleInitiatePayment}
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting ? "Đang tạo giao dịch..." : "Tạo Giao Dịch Thanh Toán ➔"}
+                  </Button>
                 </div>
-              </div>
+              </>
             )}
 
-            <div className="flex justify-between pt-3 border-t border-gray-100">
-              <Button variant="outline" size="sm" onClick={() => setCurrentStep(5)} disabled={isSubmitting}>
-                ⬅ Quay lại
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold"
-                onClick={handleConfirmBooking}
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? "Đang xử lý tạo hợp đồng..." : "Xác nhận Thanh toán & Ký hợp đồng ➔"}
-              </Button>
-            </div>
+            {/* ── Phase 2: Đã tạo giao dịch → hiển thị thông tin chuyển khoản ── */}
+            {pendingPayment && (
+              <>
+                {/* Badge trạng thái giao dịch */}
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-2xs font-semibold">
+                  <span className="animate-pulse">🟡</span>
+                  Mã giao dịch: <span className="font-mono font-bold">{pendingPayment.paymentId}</span>
+                  <span className="ml-auto text-amber-600">Đang chờ thanh toán</span>
+                </div>
+
+                {/* Thông tin chuyển khoản từ server */}
+                <div className="p-4 rounded-xl bg-gray-50 border border-gray-200 flex flex-col sm:flex-row items-center gap-4">
+                  {/* QR Placeholder */}
+                  <div className="w-32 h-32 bg-white p-2 rounded-lg border border-gray-300 flex items-center justify-center shrink-0">
+                    <div className="text-center font-mono text-2xs text-gray-600">
+                      <span className="text-3xl block">📱</span>
+                      <span className="block text-2xs text-gray-500">[Mã VietQR]</span>
+                      <span className="block font-bold text-emerald-700">PlotFarm</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5 text-2xs text-gray-700 w-full">
+                    <p><strong>Ngân hàng:</strong> {pendingPayment.bankInfo.nganHang}</p>
+                    <p>
+                      <strong>Số tài khoản:</strong>{" "}
+                      <span className="font-mono font-bold text-emerald-800">{pendingPayment.bankInfo.soTaiKhoan}</span>
+                    </p>
+                    <p><strong>Chủ tài khoản:</strong> {pendingPayment.bankInfo.chuTaiKhoan}</p>
+                    <p>
+                      <strong>Số tiền:</strong>{" "}
+                      <span className="font-mono font-bold text-emerald-700 text-sm">
+                        {pendingPayment.soTien.toLocaleString("vi-VN")} đ
+                      </span>
+                    </p>
+                    <p>
+                      <strong>Nội dung CK:</strong>{" "}
+                      <span className="font-mono bg-white px-2 py-0.5 rounded border border-gray-200 text-emerald-900 select-all">
+                        {pendingPayment.noiDungCK}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+
+                {/* Hướng dẫn */}
+                <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 text-2xs text-blue-800 flex items-start gap-2">
+                  <span>ℹ️</span>
+                  <span>
+                    Vui lòng chuyển khoản đúng <strong>số tiền</strong> và <strong>nội dung</strong> ở trên, sau đó nhấn nút bên dưới để xác nhận. Hợp đồng sẽ được kích hoạt ngay lập tức.
+                  </span>
+                </div>
+
+                <div className="flex justify-between pt-3 border-t border-gray-100">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPendingPayment(null)}
+                    disabled={isConfirming}
+                  >
+                    ⬅ Đổi phương thức
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold"
+                    onClick={handleConfirmPayment}
+                    disabled={isConfirming}
+                  >
+                    {isConfirming ? "Đang xác nhận..." : "✅ Tôi đã chuyển khoản xong →"}
+                  </Button>
+                </div>
+              </>
+            )}
           </div>
         )}
+
 
         {/* ── STEP 7: Hoàn tất & Kích hoạt thành công ───────────────── */}
         {currentStep === 7 && (
@@ -720,7 +843,7 @@ export default function BookingWizardModal({
               Chúc Mừng Bạn Đã Thuê Thửa Đất Thành Công!
             </h3>
             <p className="text-xs text-gray-600 max-w-md mx-auto leading-relaxed">
-              Hợp đồng <strong>#{bookingResult?.contract?.id || "HD-001"}</strong> đã được ký kết và kích hoạt. Thửa đất <strong>{selectedPlot?.plotCode}</strong> tại <strong>{selectedFarm?.name}</strong> đã chuyển sang trạng thái <strong>ĐANG CANH TÁC</strong>.
+              Hợp đồng <strong>#{bookingResult?.contract?.id || "HD-001"}</strong> đã được ký kết và kích hoạt. Thửa đất <strong>{selectedPlot?.plotCode}</strong> tại <strong>{selectedPlot?.farmName || selectedFarm?.name}</strong> đã chuyển sang trạng thái <strong>ĐANG CANH TÁC</strong>.
             </p>
 
             <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 max-w-md mx-auto text-left text-2xs space-y-1.5 text-emerald-950">

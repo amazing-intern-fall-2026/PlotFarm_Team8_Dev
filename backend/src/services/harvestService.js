@@ -33,10 +33,12 @@ export const createHarvest = async (body, user) => {
     const data = {
         MaHopDong: maHopDong,
         NgayThuHoachDuKien: ngayThuHoachDuKien,
+        NgayThuHoachThucTe: body.ngayThuHoachThucTe || body.NgayThuHoachThucTe || null,
         SanLuongDuKien: sanLuongDuKien,
-        TrangThaiThuHoach: 'SCHEDULED',
-        TrangThaiDongGoi: 'NOT_PACKED',
-        TrangThaiGiaoHang: 'WAITING_PICKUP',
+        SanLuongThucTe: body.sanLuongThucTe || body.SanLuongThucTe || null,
+        TrangThaiThuHoach: body.trangThaiThuHoach || body.TrangThaiThuHoach || 'SCHEDULED',
+        TrangThaiDongGoi: body.trangThaiDongGoi || body.TrangThaiDongGoi || 'NOT_PACKED',
+        TrangThaiGiaoHang: body.trangThaiGiaoHang || body.TrangThaiGiaoHang || 'WAITING_PICKUP',
         DiaChiGiaoHang: diaChiGiaoHang,
         GhiChu: ghiChu || null,
     };

@@ -1,14 +1,17 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { getCurrentUser } from "../auth/auth.api";
 import { farmerService } from "./farmer.service";
-import type { FarmingLogItem, FarmerProfileData, FarmerPlotItem } from "./farmer.types";
+import type { FarmingLogItem, FarmerProfileData, FarmerPlotItem, HarvestItem } from "./farmer.types";
 import { Card, Button, Modal, Input, Alert } from "../../components/ui";
 
 export default function FarmerLogs() {
+  const navigate = useNavigate();
   const currentUser = getCurrentUser();
   const [profile, setProfile] = useState<FarmerProfileData>(() => farmerService.getFarmerProfile());
   const [logs, setLogs] = useState<FarmingLogItem[]>(() => farmerService.getFarmingLogs());
   const [plots, setPlots] = useState<FarmerPlotItem[]>(() => farmerService.getPlots());
+  const [harvests, setHarvests] = useState<HarvestItem[]>(() => farmerService.getHarvests());
 
   const [selectedPlotFilter, setSelectedPlotFilter] = useState<string>("ALL");
   const [selectedActivityFilter, setSelectedActivityFilter] = useState<string>("ALL");
@@ -23,6 +26,7 @@ export default function FarmerLogs() {
       setProfile(farmerService.getFarmerProfile());
       setLogs(farmerService.getFarmingLogs());
       setPlots(farmerService.getPlots());
+      setHarvests(farmerService.getHarvests());
     }
     window.addEventListener("pf_farmer_changed", handleSync);
     window.addEventListener("pf_data_changed", handleSync);
@@ -82,6 +86,25 @@ export default function FarmerLogs() {
 
   // Open Edit Modal
   function handleOpenEditModal(log: FarmingLogItem) {
+    const logHarvest = harvests.find(
+      (h) =>
+        h.plot === log.plot ||
+        (log.plotId && (h.plot === log.plotId || (h as any).plotId === log.plotId)) ||
+        (log.contractId && (h.plot === log.contractId || h.id === log.contractId))
+    );
+    const isLogDelivered =
+      logHarvest?.deliveryStatus === "DELIVERED" ||
+      plots.some(
+        (p) =>
+          (p.plotCode === log.plot || p.id === log.plotId || p.contractId === log.contractId) &&
+          (p.deliveryStatus === "DELIVERED" || p.plantStatus === "Đã giao hàng")
+      );
+
+    if (isLogDelivered) {
+      alert("Vụ mùa của thửa đất này đã hoàn tất thu hoạch và giao hàng cho khách hàng. Nhật ký canh tác đã được khóa để đảm bảo tính minh bạch, không thể chỉnh sửa.");
+      return;
+    }
+
     setEditingLogId(log.id);
     setFormPlot(log.plot);
     setFormActivity(log.activity);
@@ -104,6 +127,36 @@ export default function FarmerLogs() {
     }
 
     const selectedPlotObj = plots.find((p) => p.plotCode === formPlot) || plots[0];
+    const targetHarvest = selectedPlotObj
+      ? harvests.find(
+          (h) =>
+            h.plot === selectedPlotObj.plotCode ||
+            h.plot === selectedPlotObj.id ||
+            (selectedPlotObj.contractId && h.plot === selectedPlotObj.contractId)
+        )
+      : undefined;
+
+    if (
+      targetHarvest?.deliveryStatus === "DELIVERED" ||
+      selectedPlotObj?.deliveryStatus === "DELIVERED" ||
+      selectedPlotObj?.plantStatus === "Đã giao hàng"
+    ) {
+      setFormError("Thửa đất này đã hoàn tất giao hàng cho khách hàng. Vụ mùa đã kết thúc, không thể ghi thêm hoặc chỉnh sửa nhật ký.");
+      return;
+    }
+
+    if (
+      (formActivity === "Thu hoạch" ||
+        formGrowthStage === "Giai đoạn thu hoạch" ||
+        formGrowthStage === "Đã thu hoạch") &&
+      Number(formProgress) < 95
+    ) {
+      setFormError(
+        `Hoạt động hoặc giai đoạn Thu hoạch yêu cầu tiến độ mùa vụ phải đạt từ 95% trở lên (hiện tại mới chọn: ${formProgress}%).`
+      );
+      return;
+    }
+
     const createdBy = profile.name ? `${profile.name} (Nông Dân)` : currentUser?.fullName || "Nông Dân";
 
     try {
@@ -185,7 +238,8 @@ export default function FarmerLogs() {
           <Button
             variant="primary"
             size="sm"
-            className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs font-semibold"
+            fullWidth={false}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs font-semibold whitespace-nowrap"
             onClick={handleOpenAddModal}
           >
             + Ghi Nhật Ký Mới
@@ -204,6 +258,55 @@ export default function FarmerLogs() {
           {errorMessage}
         </Alert>
       )}
+
+      {/* Harvest Stage Call-to-action Banner */}
+      {(() => {
+        const harvestTarget = plots.find(
+          (p) =>
+            p.progress >= 95 &&
+            !harvests.some(
+              (h) =>
+                (h.plot === p.plotCode ||
+                  h.plot === p.id ||
+                  (p.contractId && h.plot === p.contractId)) &&
+                (h.harvestStatus === "HARVESTED" || h.deliveryStatus === "DELIVERED")
+            ) &&
+            p.deliveryStatus !== "DELIVERED" &&
+            p.plantStatus !== "Đã giao hàng" &&
+            p.plantStatus !== "Đã thu hoạch"
+        );
+
+        if (!harvestTarget) return null;
+
+        return (
+          <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-50 via-emerald-100/70 to-amber-50 border border-emerald-300 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-start gap-3 flex-1 min-w-0">
+              <span className="text-2xl p-2 bg-white rounded-xl shadow-2xs border border-emerald-200 shrink-0">🌾</span>
+              <div className="flex-1 min-w-0">
+                <h4 className="font-bold text-sm text-emerald-950 flex flex-wrap items-center gap-2">
+                  <span>Thửa đất {harvestTarget.plotCode} đã đạt {harvestTarget.progress}% tiến độ (Giai đoạn thu hoạch)!</span>
+                  <span className="px-2 py-0.5 rounded-full text-2xs font-extrabold bg-emerald-600 text-white whitespace-nowrap">Sẵn sàng thu hoạch (≥95%)</span>
+                </h4>
+                <p className="text-xs text-emerald-800 mt-1 leading-relaxed">
+                  Cây trồng: <strong>{harvestTarget.plantCrop}</strong> • Khách hàng: <strong>{harvestTarget.customerName}</strong>. Hãy lập phiếu thu hoạch để ghi nhận sản lượng thực tế, đóng gói và giao trả nông sản cho khách hàng.
+                </p>
+              </div>
+            </div>
+            <div className="shrink-0 flex items-center">
+              <Button
+                variant="primary"
+                size="sm"
+                fullWidth={false}
+                onClick={() => navigate(`/farmer/harvest?create=true&plot=${encodeURIComponent(harvestTarget.plotCode)}`)}
+                className="bg-emerald-700 hover:bg-emerald-800 text-white font-semibold flex items-center gap-1.5 shadow-sm whitespace-nowrap px-4 py-2"
+              >
+                <span>🌾</span>
+                <span>Lập Phiếu Thu Hoạch Ngay ➔</span>
+              </Button>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Filter Bar */}
       <Card className="p-4 bg-white">
@@ -284,83 +387,137 @@ export default function FarmerLogs() {
                 </td>
               </tr>
             ) : (
-              filteredLogs.map((log) => (
-                <tr key={log.id} className="hover:bg-gray-50/70 transition">
-                  {/* Plot */}
-                  <td className="py-3.5 px-3.5 font-mono font-bold text-emerald-800 whitespace-nowrap">
-                    {log.plot}
-                  </td>
+              filteredLogs.map((log) => {
+                const logHarvest = harvests.find(
+                  (h) =>
+                    h.plot === log.plot ||
+                    (log.plotId && (h.plot === log.plotId || (h as any).plotId === log.plotId)) ||
+                    (log.contractId && (h.plot === log.contractId || h.id === log.contractId))
+                );
 
-                  {/* Date */}
-                  <td className="py-3.5 px-3.5 text-gray-600 font-medium whitespace-nowrap">
-                    {log.date}
-                  </td>
+                const isLogDelivered =
+                  logHarvest?.deliveryStatus === "DELIVERED" ||
+                  plots.some(
+                    (p) =>
+                      (p.plotCode === log.plot || p.id === log.plotId || p.contractId === log.contractId) &&
+                      (p.deliveryStatus === "DELIVERED" || p.plantStatus === "Đã giao hàng")
+                  );
 
-                  {/* Activity */}
-                  <td className="py-3.5 px-3.5 whitespace-nowrap">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                      {log.activity}
-                    </span>
-                  </td>
+                const isLogHarvested =
+                  !isLogDelivered &&
+                  (logHarvest?.harvestStatus === "HARVESTED" ||
+                    plots.some(
+                      (p) =>
+                        (p.plotCode === log.plot || p.id === log.plotId || p.contractId === log.contractId) &&
+                        (p.harvestStatus === "HARVESTED" || p.plantStatus === "Đã thu hoạch")
+                    ));
 
-                  {/* Growth Stage */}
-                  <td className="py-3.5 px-3.5 text-emerald-900 font-medium whitespace-nowrap">
-                    {log.plantStatus}
-                  </td>
+                return (
+                  <tr key={log.id} className="hover:bg-gray-50/70 transition">
+                    {/* Plot */}
+                    <td className="py-3.5 px-3.5 font-bold text-emerald-800 whitespace-nowrap">
+                      {log.plot}
+                    </td>
 
-                  {/* Progress % */}
-                  <td className="py-3.5 px-3.5 whitespace-nowrap">
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-16 h-2 bg-gray-100 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-emerald-500 rounded-full"
-                          style={{ width: `${log.progress ?? 30}%` }}
-                        />
-                      </div>
-                      <span className="font-bold text-emerald-700">
-                        {log.progress ?? 30}%
+                    {/* Date */}
+                    <td className="py-3.5 px-3.5 text-gray-500 whitespace-nowrap">
+                      {log.date}
+                    </td>
+
+                    {/* Activity */}
+                    <td className="py-3.5 px-3.5 whitespace-nowrap">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                        {log.activity}
                       </span>
-                    </div>
-                  </td>
+                    </td>
 
-                  {/* Description */}
-                  <td className="py-3.5 px-3.5 text-gray-700 leading-relaxed">
-                    {log.description}
-                  </td>
+                    {/* Stage */}
+                    <td className="py-3.5 px-3.5 text-gray-700 whitespace-nowrap">
+                      {log.plantStatus}
+                    </td>
 
-                  {/* Image */}
-                  <td className="py-3.5 px-3.5 text-center">
-                    {log.imageEvidence ? (
-                      <a
-                        href={log.imageEvidence}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-block group relative"
-                        title="Bấm để xem ảnh phóng to"
-                      >
-                        <img
-                          src={log.imageEvidence}
-                          alt="Bằng chứng"
-                          className="h-10 w-14 object-cover rounded-lg border border-gray-200 shadow-2xs group-hover:scale-105 transition mx-auto"
-                        />
-                      </a>
-                    ) : (
-                      <span className="text-gray-400 text-2xs italic">Không có</span>
-                    )}
-                  </td>
+                    {/* Progress */}
+                    <td className="py-3.5 px-3.5 whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        <div className="w-16 bg-gray-200 rounded-full h-1.5 overflow-hidden">
+                          <div
+                            className="bg-emerald-600 h-1.5 rounded-full"
+                            style={{ width: `${log.progress ?? 0}%` }}
+                          />
+                        </div>
+                        <span className="text-2xs font-semibold text-gray-600">
+                          {log.progress ?? 0}%
+                        </span>
+                      </div>
+                    </td>
 
-                  {/* Actions */}
-                  <td className="py-3.5 px-3.5 text-right whitespace-nowrap">
-                    <button
-                      type="button"
-                      onClick={() => handleOpenEditModal(log)}
-                      className="px-2.5 py-1 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded transition cursor-pointer"
-                    >
-                      ✏️ Chỉnh sửa
-                    </button>
-                  </td>
-                </tr>
-              ))
+                    {/* Description */}
+                    <td className="py-3.5 px-3.5 text-gray-700 leading-relaxed">
+                      {log.description}
+                    </td>
+
+                    {/* Image */}
+                    <td className="py-3.5 px-3.5 text-center">
+                      {log.imageEvidence ? (
+                        <a
+                          href={log.imageEvidence}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-block group relative"
+                          title="Bấm để xem ảnh phóng to"
+                        >
+                          <img
+                            src={log.imageEvidence}
+                            alt="Bằng chứng"
+                            className="h-10 w-14 object-cover rounded-lg border border-gray-200 shadow-2xs group-hover:scale-105 transition mx-auto"
+                          />
+                        </a>
+                      ) : (
+                        <span className="text-gray-400 text-2xs italic">Không có</span>
+                      )}
+                    </td>
+
+                    {/* Actions */}
+                    <td className="py-3.5 px-3.5 text-right whitespace-nowrap">
+                      <div className="flex items-center justify-end gap-1.5">
+                        {isLogDelivered ? (
+                          <span
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-2xs font-semibold text-gray-500 bg-gray-100 rounded border border-gray-200 select-none"
+                            title="Vụ mùa của thửa đất này đã hoàn tất giao hàng. Nhật ký đã khóa để đảm bảo tính minh bạch, không thể chỉnh sửa."
+                          >
+                            <span>🔒</span>
+                            <span>Đã khóa (Đã giao hàng)</span>
+                          </span>
+                        ) : (
+                          <>
+                            {!isLogHarvested &&
+                              (log.progress ?? 0) >= 95 && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    navigate(`/farmer/harvest?create=true&plot=${encodeURIComponent(log.plot)}`)
+                                  }
+                                  className="px-2.5 py-1 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                                  title="Lập phiếu thu hoạch cho đợt này (Tiến độ ≥ 95%)"
+                                >
+                                  <span>🌾</span>
+                                  <span>Thu hoạch</span>
+                                </button>
+                              )}
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditModal(log)}
+                              className="px-2.5 py-1 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded transition cursor-pointer"
+                            >
+                              ✏️ Chỉnh sửa
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
@@ -390,11 +547,20 @@ export default function FarmerLogs() {
               className="w-full rounded-lg border border-gray-300 p-2.5 text-xs bg-white focus:outline-none"
               required
             >
-              {plots.map((p) => (
-                <option key={p.id} value={p.plotCode}>
-                  {p.plotCode} - {p.plantCrop} (HĐ: {p.contractId})
-                </option>
-              ))}
+              {plots.map((p) => {
+                const plotHarvest = harvests.find(
+                  (h) => h.plot === p.plotCode || h.plot === p.id || (p.contractId && h.plot === p.contractId)
+                );
+                const isPlotDelivered =
+                  plotHarvest?.deliveryStatus === "DELIVERED" ||
+                  p.deliveryStatus === "DELIVERED" ||
+                  p.plantStatus === "Đã giao hàng";
+                return (
+                  <option key={p.id} value={p.plotCode} disabled={isPlotDelivered}>
+                    {p.plotCode} - {p.plantCrop} (HĐ: {p.contractId}){isPlotDelivered ? " — [Đã giao hàng - Đã khóa vụ]" : ""}
+                  </option>
+                );
+              })}
             </select>
           </div>
 
@@ -408,11 +574,15 @@ export default function FarmerLogs() {
                 onChange={(e) => setFormActivity(e.target.value)}
                 className="w-full rounded-lg border border-gray-300 p-2.5 text-xs bg-white focus:outline-none"
               >
-                {activityOptions.map((act) => (
-                  <option key={act} value={act}>
-                    {act}
-                  </option>
-                ))}
+                {activityOptions.map((act) => {
+                  const isHarvestAct = act === "Thu hoạch";
+                  const isDisabled = isHarvestAct && Number(formProgress) < 95;
+                  return (
+                    <option key={act} value={act} disabled={isDisabled}>
+                      {act} {isDisabled ? "(Yêu cầu tiến độ ≥ 95%)" : ""}
+                    </option>
+                  );
+                })}
               </select>
             </div>
 
@@ -425,11 +595,15 @@ export default function FarmerLogs() {
                 onChange={(e) => setFormGrowthStage(e.target.value)}
                 className="w-full rounded-lg border border-gray-300 p-2.5 text-xs bg-white focus:outline-none"
               >
-                {growthStageOptions.map((stage) => (
-                  <option key={stage} value={stage}>
-                    {stage}
-                  </option>
-                ))}
+                {growthStageOptions.map((stage) => {
+                  const isHarvestStage = stage === "Giai đoạn thu hoạch";
+                  const isDisabled = isHarvestStage && Number(formProgress) < 95;
+                  return (
+                    <option key={stage} value={stage} disabled={isDisabled}>
+                      {stage} {isDisabled ? "(Yêu cầu tiến độ ≥ 95%)" : ""}
+                    </option>
+                  );
+                })}
               </select>
             </div>
           </div>
@@ -456,7 +630,7 @@ export default function FarmerLogs() {
             <div className="flex justify-between text-2xs text-gray-500 font-medium">
               <span>0% (Mới gieo)</span>
               <span>50% (Phát triển mạnh)</span>
-              <span>100% (Thu hoạch)</span>
+              <span>95%+ (Thu hoạch)</span>
             </div>
           </div>
 

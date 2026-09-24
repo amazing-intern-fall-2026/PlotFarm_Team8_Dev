@@ -64,11 +64,27 @@ export const createContract = async (contractData, transaction) => {
     request.input('ngayBatDau', sql.Date, contractData.NgayBatDau);
     request.input('ngayKetThuc', sql.Date, contractData.NgayKetThuc);
     request.input('tongTien', sql.Decimal(18,0), contractData.TongTien);
-    request.input('trangThai', sql.VarChar, 'ACTIVE');
+    // Cho phep truyen TrangThai tu ben ngoai; mac dinh la PENDING (cho xac nhan thanh toan)
+    request.input('trangThai', sql.VarChar, contractData.TrangThai || 'PENDING');
     
     const result = await request.query(query);
     return result.recordset[0];
 };
+
+// Kich hoat hop dong PENDING -> ACTIVE (goi sau khi xac nhan thanh toan)
+export const activateContract = async (maHopDong, transaction) => {
+    const request = new sql.Request(transaction || getPool());
+    request.input('maHopDong', sql.VarChar, maHopDong);
+    const result = await request.query(`
+        UPDATE dbo.HOPDONGTHUE
+        SET TrangThai = 'ACTIVE', UpdatedAt = SYSUTCDATETIME()
+        OUTPUT INSERTED.*
+        WHERE MaHopDong = @maHopDong AND TrangThai = 'PENDING'
+    `);
+    return result.recordset[0];
+};
+
+
 
 // ─── Extended Functions ───────────────────────────────────────────────────────
 

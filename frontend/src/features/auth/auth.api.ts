@@ -49,12 +49,17 @@ if (typeof window !== "undefined") {
 // ─────────────────────────────────────────────────────────────
 
 /**
- * Trả về storage đang lưu token.
- * Ưu tiên sessionStorage trước (phiên hiện tại không ghi nhớ),
- * rồi mới kiểm tra localStorage (phiên ghi nhớ lâu dài).
+ * Return the active storage based on what the user chose at login.
+ * Falls back to localStorage if the REMEMBER key is not set.
  */
 function getActiveStorage(): Storage {
   if (typeof window === "undefined") return localStorage;
+  const inSession = sessionStorage.getItem(STORAGE_KEYS.REMEMBER);
+  if (inSession !== null) {
+    return inSession === "1" ? localStorage : sessionStorage;
+  }
+  const inLocal = localStorage.getItem(STORAGE_KEYS.REMEMBER);
+  if (inLocal === "0") return sessionStorage;
   if (sessionStorage.getItem(STORAGE_KEYS.TOKEN)) return sessionStorage;
   return localStorage;
 }
@@ -372,6 +377,7 @@ export async function changePassword(data: {
   const res = await response.json();
   return { message: res.message || "Đổi mật khẩu thành công!" };
 }
+
 
 // ─────────────────────────────────────────────────────────────
 // Session management
