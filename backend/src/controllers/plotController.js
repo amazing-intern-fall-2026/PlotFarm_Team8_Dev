@@ -19,6 +19,13 @@ export const getPlotById = async (req, res, next) => {
     } catch (err) { next(err); }
 };
 
+export const getPlotCamera = async (req, res, next) => {
+    try {
+        const data = await plotService.getPlotCamera(req.params.id, req.user);
+        successResponse(res, { data, message: 'Lấy luồng camera thành công' });
+    } catch (err) { next(err); }
+};
+
 export const createPlot = async (req, res, next) => {
     try {
         const data = await plotService.createPlot(req.body, req.user);

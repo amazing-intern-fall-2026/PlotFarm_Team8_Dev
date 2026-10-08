@@ -7,6 +7,7 @@ const router = express.Router();
 
 router.get('/', authenticate, plotController.getAllPlots);
 router.get('/:id', authenticate, plotController.getPlotById);
+router.get('/:id/camera', authenticate, plotController.getPlotCamera);
 router.post('/', authenticate, authorize('ADMIN', 'FARMER'), plotController.createPlot);
 router.put('/:id', authenticate, authorize('ADMIN', 'FARMER'), plotController.updatePlot);
 router.patch('/:id/sensor', authenticate, authorize('ADMIN', 'FARMER'), plotController.updateSensor);

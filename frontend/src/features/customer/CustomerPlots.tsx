@@ -4,7 +4,7 @@ import type {
   SharedFarmingLogItem,
   SharedPlotItem,
 } from "./customer.types";
-import { Badge, Button, Card, Modal } from "../../components/ui";
+import { Badge, Button, Card, Modal, CameraStreamPlayer } from "../../components/ui";
 
 interface CustomerPlotsProps {
   onOpenCreateRequest: (plotCode?: string) => void;
@@ -417,24 +417,12 @@ export default function CustomerPlots({
         }
       >
         <div className="space-y-4 text-xs">
-          <div className="relative overflow-hidden rounded-xl bg-black aspect-video flex items-center justify-center">
-            <img
-              src={
-                selectedPlot?.cameraFeedUrl ||
-                "https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=800&auto=format&fit=crop&q=80"
-              }
-              alt="Camera feed"
-              className="w-full h-full object-cover opacity-90"
-            />
-            {/* Live Indicator Overlay */}
-            <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-black/60 backdrop-blur-xs text-white px-2.5 py-1 rounded-full text-2xs font-semibold">
-              <span className="h-2 w-2 rounded-full bg-red-500 animate-ping" />
-              <span>LIVE CAM • TRẠM #{selectedPlot?.plotCode.replace("#", "")}</span>
-            </div>
-            <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-xs text-white px-3 py-1 rounded-md text-2xs font-mono">
-              {selectedPlot?.farmName} • {new Date().toLocaleDateString("vi-VN")}
-            </div>
-          </div>
+          <CameraStreamPlayer
+            cameraUrl={selectedPlot?.cameraFeedUrl}
+            plotCode={selectedPlot?.plotCode}
+            farmName={selectedPlot?.farmName}
+            fallbackImage={selectedPlot?.plotThumbnail}
+          />
 
           <div className="p-3 rounded-xl bg-gray-50 border border-gray-200 flex items-center justify-between text-gray-600">
             <span>Độ phân giải: <strong>Full HD 1080p (30fps)</strong></span>

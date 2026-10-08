@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Button, Badge, Modal, Input, Spinner, Alert, Card } from '../../components/ui';
+import { Button, Badge, Modal, Input, Spinner, Alert, Card, CameraStreamPlayer } from '../../components/ui';
 import { adminService } from './admin.service';
 import type { AdminFarm, AdminPlot, AdminUser } from './admin.types';
 
 export default function AdminFarmsPlots() {
   const [activeSubTab, setActiveSubTab] = useState<'farms' | 'plots'>('farms');
+  const [cameraPreviewPlot, setCameraPreviewPlot] = useState<AdminPlot | null>(null);
 
   // Farms state
   const [farms, setFarms] = useState<AdminFarm[]>([]);
@@ -560,14 +561,13 @@ export default function AdminFarmsPlots() {
                       </td>
                       <td className="px-5 py-3.5">
                         {p.CameraUrl ? (
-                          <a
-                            href={p.CameraUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-2xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded font-medium hover:underline"
+                          <button
+                            type="button"
+                            onClick={() => setCameraPreviewPlot(p)}
+                            className="inline-flex items-center gap-1 text-2xs text-blue-600 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded font-medium transition cursor-pointer"
                           >
                             📹 Xem luồng
-                          </a>
+                          </button>
                         ) : (
                           <span className="text-gray-400 text-2xs italic">Chưa gắn</span>
                         )}
@@ -946,6 +946,38 @@ export default function AdminFarmsPlots() {
             </Button>
           </div>
         </div>
+      </Modal>
+
+      {/* Admin Camera Preview Modal */}
+      <Modal
+        isOpen={Boolean(cameraPreviewPlot)}
+        onClose={() => setCameraPreviewPlot(null)}
+        title={`Giám Sát Camera - ${cameraPreviewPlot?.TenODat || ''}`}
+        description="Kiểm tra luồng trực tiếp từ trạm camera thực địa của trang trại."
+        footer={
+          <Button
+            variant="outline"
+            size="sm"
+            fullWidth={false}
+            onClick={() => setCameraPreviewPlot(null)}
+          >
+            Đóng
+          </Button>
+        }
+      >
+        {cameraPreviewPlot && (
+          <div className="space-y-4">
+            <CameraStreamPlayer
+              cameraUrl={cameraPreviewPlot.CameraUrl}
+              plotCode={cameraPreviewPlot.TenODat}
+              farmName={farms.find((f) => f.MaNongTrai === cameraPreviewPlot.MaNongTrai)?.TenNongTrai || "PlotFarm"}
+              fallbackImage={cameraPreviewPlot.HinhAnhThumbnail || undefined}
+            />
+            <div className="p-3 rounded-lg bg-gray-50 border border-gray-200 text-2xs font-mono break-all text-gray-600">
+              <strong>URL luồng nguồn:</strong> {cameraPreviewPlot.CameraUrl || "Chưa cấu hình"}
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );

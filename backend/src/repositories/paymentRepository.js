@@ -1,4 +1,4 @@
-﻿import sql from 'mssql';
+import sql from 'mssql';
 import { getPool } from '../config/database.js';
 import { generateIncrementalId } from '../utils/idGenerator.js';
 
@@ -39,10 +39,38 @@ export const createPayment = async (data, transaction) => {
     return result.recordset[0];
 };
 
-export const getPaymentById = async (id) => {
-    const request = new sql.Request(getPool());
+export const getPaymentById = async (id, transaction = null) => {
+    const request = new sql.Request(transaction || getPool());
     request.input('id', sql.VarChar, id);
     const result = await request.query(BASE_SELECT + ` WHERE TT.MaThanhToan = @id`);
+    return result.recordset[0];
+};
+
+export const getPaymentForUpdate = async (id, transaction) => {
+    const request = new sql.Request(transaction || getPool());
+    request.input('id', sql.VarChar, id);
+    const result = await request.query(`
+        SELECT
+            TT.*,
+            KH.TenKH, KH.Email, KH.DienThoai,
+            HD.MaODat, HD.MaCayTrong, HD.NgayBatDau, HD.NgayKetThuc,
+            HD.TongTien AS TongTienHopDong, HD.TrangThai AS TrangThaiHopDong,
+            OD.TenODat, OD.DienTich,
+            NT.TenNongTrai, NT.MaNongTrai
+        FROM dbo.THANHTOAN TT WITH (UPDLOCK, ROWLOCK)
+        JOIN dbo.KHACHHANG   KH ON TT.MaKH      = KH.MaKH
+        JOIN dbo.HOPDONGTHUE HD ON TT.MaHopDong = HD.MaHopDong
+        JOIN dbo.ODAT        OD ON HD.MaODat    = OD.MaODat
+        JOIN dbo.NONGTRAI    NT ON OD.MaNongTrai = NT.MaNongTrai
+        WHERE TT.MaThanhToan = @id
+    `);
+    return result.recordset[0];
+};
+
+export const getPaymentByContentOrOrder = async (content, transaction = null) => {
+    const request = new sql.Request(transaction || getPool());
+    request.input('content', sql.VarChar, `%${content}%`);
+    const result = await request.query(BASE_SELECT + ` WHERE TT.NoiDungCK LIKE @content OR TT.MaThanhToan LIKE @content`);
     return result.recordset[0];
 };
 
@@ -76,15 +104,17 @@ export const getAllPayments = async (filters = {}) => {
     return result.recordset;
 };
 
-export const updatePaymentStatus = async (id, trangThai, maGiaoDich, transaction) => {
+export const updatePaymentStatus = async (id, trangThai, maGiaoDich, transaction, ghiChu = null) => {
     const request = new sql.Request(transaction || getPool());
     request.input('id',         sql.VarChar, id);
     request.input('trangThai',  sql.VarChar, trangThai);
     request.input('maGiaoDich', sql.VarChar, maGiaoDich || null);
+    request.input('ghiChu',     sql.NVarChar(500), ghiChu);
     const result = await request.query(`
         UPDATE dbo.THANHTOAN
         SET TrangThai  = @trangThai,
-            MaGiaoDich = @maGiaoDich,
+            MaGiaoDich = COALESCE(@maGiaoDich, MaGiaoDich),
+            GhiChu     = CASE WHEN @ghiChu IS NOT NULL THEN @ghiChu ELSE GhiChu END,
             UpdatedAt  = SYSUTCDATETIME()
         OUTPUT INSERTED.*
         WHERE MaThanhToan = @id

@@ -23,3 +23,4 @@ export {
 } from "./Loading";
 export { default as StatCard, type StatCardProps } from "./StatCard";
 export { default as SmsSimulatorModal, type SmsNotificationPayload } from "./SmsSimulatorModal";
+export { default as CameraStreamPlayer, type CameraStreamPlayerProps } from "./CameraStreamPlayer";

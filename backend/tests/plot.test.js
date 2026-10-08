@@ -16,6 +16,10 @@ const mockFarmRepo = {
   getFarmById: jest.fn(),
 };
 
+const mockContractRepo = {
+  getContractsByCustomerId: jest.fn(),
+};
+
 const mockPool = {
   request: jest.fn(() => ({
     query: jest.fn(),
@@ -25,6 +29,7 @@ const mockPool = {
 
 jest.unstable_mockModule('../src/repositories/plotRepository.js', () => mockPlotRepo);
 jest.unstable_mockModule('../src/repositories/farmRepository.js', () => mockFarmRepo);
+jest.unstable_mockModule('../src/repositories/contractRepository.js', () => mockContractRepo);
 jest.unstable_mockModule('../src/config/database.js', () => ({
   getPool: jest.fn(() => mockPool),
   connectDatabase: jest.fn(),
@@ -431,6 +436,96 @@ describe('Plot Management API Test Suite', () => {
 
       expect(res.status).toBe(404);
       expect(res.body.message).toBe('Không tìm thấy ô đất');
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // 6. GET /api/v1/plots/:id/camera (Camera Feed Security & Authorization)
+  // ──────────────────────────────────────────────────────────────────────────
+  describe('GET /api/v1/plots/:id/camera', () => {
+    test('Admin co quyen xem luong camera cua bat ky thua dat nao', async () => {
+      mockPlotRepo.getPlotById.mockResolvedValueOnce({
+        MaODat: 'OD001',
+        TenODat: 'Ô đất A1',
+        CameraUrl: 'https://live.farm/cam1.mp4',
+      });
+
+      const res = await request(app)
+        .get('/api/v1/plots/OD001/camera')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.cameraUrl).toBe('https://live.farm/cam1.mp4');
+      expect(res.body.data.status).toBe('ONLINE');
+    });
+
+    test('Farmer phu trach nong trai co quyen xem luong camera', async () => {
+      mockPlotRepo.getPlotById.mockResolvedValueOnce({
+        MaODat: 'OD001',
+        TenODat: 'Ô đất A1',
+        CameraUrl: 'https://live.farm/cam1.mp4',
+        MaChuNongTrai: 'NV001',
+      });
+
+      const res = await request(app)
+        .get('/api/v1/plots/OD001/camera')
+        .set('Authorization', `Bearer ${farmerToken}`); // NV001
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.cameraUrl).toBe('https://live.farm/cam1.mp4');
+    });
+
+    test('Farmer KHONG phu trach nong trai bi chan 403', async () => {
+      mockPlotRepo.getPlotById.mockResolvedValueOnce({
+        MaODat: 'OD001',
+        TenODat: 'Ô đất A1',
+        CameraUrl: 'https://live.farm/cam1.mp4',
+        MaChuNongTrai: 'NV009', // khác NV001
+      });
+
+      const res = await request(app)
+        .get('/api/v1/plots/OD001/camera')
+        .set('Authorization', `Bearer ${farmerToken}`);
+
+      expect(res.status).toBe(403);
+      expect(res.body.message).toContain('Bạn không có quyền truy cập luồng camera của thửa đất này.');
+    });
+
+    test('Customer co hop dong ACTIVE duoc phep xem camera cua thua dat', async () => {
+      mockPlotRepo.getPlotById.mockResolvedValueOnce({
+        MaODat: 'OD001',
+        TenODat: 'Ô đất A1',
+        CameraUrl: 'https://live.farm/cam1.mp4',
+      });
+      mockContractRepo.getContractsByCustomerId.mockResolvedValueOnce([
+        { MaHopDong: 'HD001', MaODat: 'OD001', TrangThai: 'ACTIVE' },
+      ]);
+
+      const res = await request(app)
+        .get('/api/v1/plots/OD001/camera')
+        .set('Authorization', `Bearer ${customerToken}`); // KH001
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.cameraUrl).toBe('https://live.farm/cam1.mp4');
+      expect(res.body.data.contractId).toBe('HD001');
+    });
+
+    test('Customer KHONG co hop dong ACTIVE bi chan 403', async () => {
+      mockPlotRepo.getPlotById.mockResolvedValueOnce({
+        MaODat: 'OD001',
+        TenODat: 'Ô đất A1',
+        CameraUrl: 'https://live.farm/cam1.mp4',
+      });
+      mockContractRepo.getContractsByCustomerId.mockResolvedValueOnce([
+        { MaHopDong: 'HD001', MaODat: 'OD002', TrangThai: 'ACTIVE' }, // khác OD001
+      ]);
+
+      const res = await request(app)
+        .get('/api/v1/plots/OD001/camera')
+        .set('Authorization', `Bearer ${customerToken}`);
+
+      expect(res.status).toBe(403);
+      expect(res.body.message).toContain('Bạn không có quyền truy cập luồng camera của thửa đất này.');
     });
   });
 });

@@ -1,21 +1,123 @@
 import * as plotRepo from '../repositories/plotRepository.js';
 import * as farmRepo from '../repositories/farmRepository.js';
+import * as contractRepo from '../repositories/contractRepository.js';
 import { AppError } from '../utils/AppError.js';
 
 export const getPlots = async (filters = {}, user) => {
     if (user?.role === 'FARMER') {
         filters.farmerId = user.userId;
     }
-    return await plotRepo.getAllPlots(filters);
-};
+    const plots = await plotRepo.getAllPlots(filters);
 
+    // Bảo mật: Tại danh sách chung, chỉ ADMIN mới xem được CameraUrl trực tiếp.
+    // Với người dùng khác hoặc công khai, mask CameraUrl = null để bảo vệ riêng tư.
+    if (user?.role !== 'ADMIN') {
+        return plots.map((p) => ({
+            ...p,
+            CameraUrl: null,
+        }));
+    }
+    return plots;
+};
 
 export const getPlotById = async (id, user) => {
     const plot = await plotRepo.getPlotById(id);
     if (!plot) {
         throw new AppError('Không tìm thấy ô đất', 404);
     }
+
+    // Kiểm tra quyền xem camera trên chi tiết ô đất
+    let canViewCamera = false;
+    if (user?.role === 'ADMIN') {
+        canViewCamera = true;
+    } else if (user?.role === 'FARMER' && plot.MaChuNongTrai === user.userId) {
+        canViewCamera = true;
+    } else if (user?.role === 'CUSTOMER') {
+        try {
+            const contracts = await contractRepo.getContractsByCustomerId(user.userId);
+            const hasActive = contracts?.some(
+                (c) => c.MaODat === id && c.TrangThai === 'ACTIVE'
+            );
+            if (hasActive) canViewCamera = true;
+        } catch {
+            canViewCamera = false;
+        }
+    }
+
+    if (!canViewCamera) {
+        return {
+            ...plot,
+            CameraUrl: null,
+        };
+    }
+
     return plot;
+};
+
+// Endpoint bảo vệ: Chỉ trả về CameraUrl nếu có quyền hợp lệ
+export const getPlotCamera = async (id, user) => {
+    if (!user) {
+        throw new AppError('Yêu cầu xác thực tài khoản.', 401);
+    }
+
+    const plot = await plotRepo.getPlotById(id);
+    if (!plot) {
+        throw new AppError('Không tìm thấy ô đất', 404);
+    }
+
+    // 1. ADMIN: Toàn quyền
+    if (user.role === 'ADMIN') {
+        return {
+            plotId: plot.MaODat,
+            plotName: plot.TenODat,
+            cameraUrl: plot.CameraUrl,
+            status: plot.CameraUrl ? 'ONLINE' : 'OFFLINE',
+        };
+    }
+
+    // 2. FARMER: Phụ trách nông trại chứa ô đất này
+    if (user.role === 'FARMER') {
+        if (plot.MaChuNongTrai === user.userId) {
+            return {
+                plotId: plot.MaODat,
+                plotName: plot.TenODat,
+                cameraUrl: plot.CameraUrl,
+                status: plot.CameraUrl ? 'ONLINE' : 'OFFLINE',
+            };
+        }
+        throw new AppError('Bạn không có quyền truy cập luồng camera của thửa đất này.', 403);
+    }
+
+    // 3. CUSTOMER: Phải đang sở hữu hợp đồng thuê thửa đất đó còn hiệu lực (ACTIVE)
+    if (user.role === 'CUSTOMER') {
+        let hasActive = false;
+        let contractId = null;
+        try {
+            const contracts = await contractRepo.getContractsByCustomerId(user.userId);
+            const activeContract = contracts?.find(
+                (c) => c.MaODat === id && c.TrangThai === 'ACTIVE'
+            );
+            if (activeContract) {
+                hasActive = true;
+                contractId = activeContract.MaHopDong;
+            }
+        } catch {
+            hasActive = false;
+        }
+
+        if (hasActive) {
+            return {
+                plotId: plot.MaODat,
+                plotName: plot.TenODat,
+                cameraUrl: plot.CameraUrl,
+                status: plot.CameraUrl ? 'ONLINE' : 'OFFLINE',
+                contractId,
+            };
+        }
+        throw new AppError('Bạn không có quyền truy cập luồng camera của thửa đất này.', 403);
+    }
+
+    throw new AppError('Bạn không có quyền truy cập luồng camera của thửa đất này.', 403);
 };
 
 export const createPlot = async (body, user) => {
